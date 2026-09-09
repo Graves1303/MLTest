@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --paper: #FFFBF0;
+  --surface: #FFFFFF;
+  --ink: #24272C;
+  --ink-soft: #5A606A;
+  --dawn: #FFDA59;
+  --horizon: #4A4F57;
+  --horizon-bright: #FFB007;
+  --sand: #E78835;
+  --clay: #C63A3F;
+  --pine: #5A606A;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-dawn: var(--dawn);
+  --color-horizon: var(--horizon);
+  --color-horizon-bright: var(--horizon-bright);
+  --color-sand: var(--sand);
+  --color-clay: var(--clay);
+  --color-pine: var(--pine);
+  --font-display: 'Poppins', sans-serif;
+  --font-headline: 'Playfair Display', serif;
+  --font-body: 'Poppins', sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Poppins', sans-serif;
+}
+
+button {
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: 'Poppins', sans-serif;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--horizon-bright);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
