@@ -117,6 +117,19 @@ grants manager-review access, so make sure the org chart is right before the
 cycle starts. Anyone can be reassigned later, and reviews already in progress
 follow the new manager immediately.
 
+For adding many people at once, use **Import roster from CSV** on the same
+page. Required columns: Name, Email. Optional: Title, Level, Manager (their
+name or email — either resolves), HR Admin (yes/no). A manager can be listed
+anywhere in the same file, including after the people who report to them —
+resolution happens in a second pass once everyone in the batch exists. If a
+manager name matches more than one person, or doesn't match anyone, that row
+is flagged and left unassigned rather than guessed. Re-importing someone
+already on the roster (matched by email) updates their profile without
+touching their password or duplicating the account. New accounts get a
+random temporary password, shown once in the results after import — copy
+those out before closing the panel, since there's no email system to resend
+them.
+
 ## Deploying
 
 This is a standard Next.js app, so it deploys to
