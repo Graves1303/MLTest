@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [isHrAdmin, setIsHrAdmin] = useState(false);
+  const [viewMode, setViewMode] = useState<"mine" | "admin">("mine");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +38,11 @@ export default function DashboardPage() {
     }
   }
 
-  const filtered = (rows || []).filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const scoped =
+    isHrAdmin && viewMode === "mine"
+      ? (rows || []).filter((r) => r.id === viewerId || r.managerId === viewerId)
+      : rows || [];
+  const filtered = scoped.filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <div>
@@ -73,6 +78,35 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {isHrAdmin && (
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setViewMode("mine")}
+            className="rounded-full px-3.5 py-1.5 text-xs font-semibold border"
+            style={
+              viewMode === "mine"
+                ? { borderColor: "var(--horizon)", color: "var(--horizon)", background: "rgba(63,78,99,0.08)" }
+                : { borderColor: "rgba(0,0,0,0.15)", color: "var(--ink-soft)", background: "transparent" }
+            }
+          >
+            My view
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("admin")}
+            className="rounded-full px-3.5 py-1.5 text-xs font-semibold border"
+            style={
+              viewMode === "admin"
+                ? { borderColor: "var(--horizon)", color: "var(--horizon)", background: "rgba(63,78,99,0.08)" }
+                : { borderColor: "rgba(0,0,0,0.15)", color: "var(--ink-soft)", background: "transparent" }
+            }
+          >
+            Admin view — everyone
+          </button>
+        </div>
+      )}
+
       <section className="bg-white border border-black/10 rounded-xl p-5">
         <header className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
           <h3 className="font-[family-name:var(--font-display)] font-semibold text-base">Roster</h3>
@@ -89,7 +123,11 @@ export default function DashboardPage() {
         {!error && rows === null && <div className="text-[var(--ink-soft)] text-sm py-8 text-center">Loading roster…</div>}
         {!error && rows !== null && filtered.length === 0 && (
           <p className="text-[var(--ink-soft)] text-[13.5px] italic py-3">
-            {rows.length === 0 ? "No one's visible to you yet. Ask HR to add people to the roster." : "No matches for that name."}
+            {filtered.length === 0 && query.trim() === ""
+              ? isHrAdmin && viewMode === "mine"
+                ? "You don't manage anyone directly. Switch to Admin view to see the full roster."
+                : "No one's visible to you yet. Ask HR to add people to the roster."
+              : "No matches for that name."}
           </p>
         )}
 

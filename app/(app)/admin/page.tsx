@@ -25,6 +25,11 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
+  const [newPasswordValue, setNewPasswordValue] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     email: "",
@@ -86,6 +91,27 @@ export default function AdminPage() {
       await loadRoster();
     } catch (err: any) {
       setError(err.message);
+    }
+  }
+
+  function openResetPassword(id: string) {
+    setResetPasswordId(resetPasswordId === id ? null : id);
+    setNewPasswordValue(randomPassword());
+    setResetNotice(null);
+    setResetError(null);
+  }
+
+  async function submitResetPassword(id: string, name: string) {
+    setResettingPassword(true);
+    setResetError(null);
+    setResetNotice(null);
+    try {
+      await api.post(`/api/users/${id}/reset-password`, { newPassword: newPasswordValue });
+      setResetNotice(`New password set for ${name}. Share this with them: ${newPasswordValue}`);
+    } catch (err: any) {
+      setResetError(err.message || "Couldn't reset that password.");
+    } finally {
+      setResettingPassword(false);
     }
   }
 
@@ -197,14 +223,55 @@ export default function AdminPage() {
                   {r.email} · {r.title || "no title"} · Manager: {rows.find((m) => m.id === r.managerId)?.name || "none"}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditingId(editingId === r.id ? null : r.id)}
-                className="text-[var(--horizon)] text-[13px] font-semibold"
-              >
-                {editingId === r.id ? "Close" : "Edit"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => openResetPassword(r.id)}
+                  className="text-[var(--horizon)] text-[13px] font-semibold"
+                >
+                  {resetPasswordId === r.id ? "Close" : "Reset password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingId(editingId === r.id ? null : r.id)}
+                  className="text-[var(--horizon)] text-[13px] font-semibold"
+                >
+                  {editingId === r.id ? "Close" : "Edit"}
+                </button>
+              </div>
             </div>
+            {resetPasswordId === r.id && (
+              <div className="mt-3 bg-[var(--paper)] rounded-lg p-3.5 max-w-md">
+                <p className="text-[13px] text-[var(--ink-soft)] mb-2.5">
+                  Set a new password for {r.name}. They'll be asked to change it the first time they sign in with it.
+                </p>
+                <div className="flex gap-2 mb-2.5">
+                  <input
+                    value={newPasswordValue}
+                    onChange={(e) => setNewPasswordValue(e.target.value)}
+                    className="flex-1 border border-black/18 rounded-lg px-3 py-2 text-sm font-[family-name:var(--font-display)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNewPasswordValue(randomPassword())}
+                    className="border border-black/18 rounded-lg px-3 text-xs font-semibold"
+                  >
+                    Regenerate
+                  </button>
+                </div>
+                {resetError && <div className="text-[var(--clay)] text-[13px] font-semibold mb-2">{resetError}</div>}
+                {resetNotice && <div className="text-[var(--pine)] text-[13px] font-semibold mb-2">{resetNotice}</div>}
+                <button
+                  type="button"
+                  disabled={resettingPassword || newPasswordValue.length < 8}
+                  onClick={() => submitResetPassword(r.id, r.name)}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: "var(--horizon)" }}
+                >
+                  {resettingPassword ? "Setting…" : "Set password"}
+                </button>
+              </div>
+            )}
             {editingId === r.id && (
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[var(--paper)] rounded-lg p-3.5">
                 <label className="block">
