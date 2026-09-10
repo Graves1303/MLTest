@@ -35,7 +35,7 @@ export async function GET() {
           valuesComments: "",
           competencies: emptyRatingMap(COMPETENCY_ITEMS),
           competenciesComments: "",
-          status: "draft",
+          status: "none",
           submittedAt: null,
         },
   });

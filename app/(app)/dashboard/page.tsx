@@ -15,6 +15,39 @@ type Row = {
   managerStatus: string;
 };
 
+type PeerAssignment = { employeeId: string; employeeName: string; submitted: boolean };
+
+function AssignmentRow({
+  type,
+  subtitle,
+  status,
+  href,
+  submittedLabel = "View",
+  pendingLabel = "Start / continue",
+}: {
+  type: string;
+  subtitle: string;
+  status: string;
+  href: string;
+  submittedLabel?: string;
+  pendingLabel?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 border-t border-black/[0.08] first:border-t-0 flex-wrap">
+      <div>
+        <div className="font-semibold text-sm">{type}</div>
+        <div className="text-[13px] text-[var(--ink-soft)]">{subtitle}</div>
+      </div>
+      <div className="flex items-center gap-3">
+        <StatusPill status={status} />
+        <Link href={href} className="text-[var(--horizon)] font-semibold text-[13px] hover:text-[var(--denim)]">
+          {status === "submitted" ? submittedLabel : pendingLabel}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [viewerId, setViewerId] = useState<string | null>(null);
@@ -22,6 +55,8 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<"mine" | "admin">("mine");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [upward, setUpward] = useState<{ managerName: string | null; draft: { status: string } | null } | null>(null);
+  const [peerAssignments, setPeerAssignments] = useState<PeerAssignment[] | null>(null);
 
   useEffect(() => {
     load();
@@ -29,14 +64,24 @@ export default function DashboardPage() {
 
   async function load() {
     try {
-      const [me, dash] = await Promise.all([api.get("/api/auth/me"), api.get("/api/dashboard")]);
+      const [me, dash, upwardRes, peerRes] = await Promise.all([
+        api.get("/api/auth/me"),
+        api.get("/api/dashboard"),
+        api.get("/api/upward/draft"),
+        api.get("/api/peer-assignments/mine"),
+      ]);
       setViewerId(me.id);
       setIsHrAdmin(me.isHrAdmin);
       setRows(dash);
+      setUpward(upwardRes);
+      setPeerAssignments(peerRes);
     } catch (err: any) {
       setError(err.message);
     }
   }
+
+  const myRow = (rows || []).find((r) => r.id === viewerId);
+  const myReports = (rows || []).filter((r) => r.managerId === viewerId);
 
   const scoped =
     isHrAdmin && viewMode === "mine"
@@ -44,39 +89,79 @@ export default function DashboardPage() {
       : rows || [];
   const filtered = scoped.filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()));
 
+  const hasAnyAssignment =
+    myRow || upward?.managerName || myReports.length > 0 || (peerAssignments && peerAssignments.length > 0);
+
   return (
     <div>
       <div className="pb-7">
         <h1 className="font-[family-name:var(--font-headline)] font-bold text-[32px] leading-tight mb-2.5">
           Performance Reviews
         </h1>
-        <p className="text-[var(--ink-soft)] text-base mb-5">
+        <p className="text-[var(--ink-soft)] text-base">
           Complete a self review, upward review, and any assigned peer or direct report reviews.
         </p>
-        {viewerId && (
-          <div className="flex flex-wrap gap-2.5">
-            <Link
-              href={`/review/${viewerId}/self`}
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white"
-              style={{ background: "var(--horizon)" }}
-            >
-              Start or continue my self review
-            </Link>
-            <Link
-              href="/peer-feedback"
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold border border-black/20 bg-white"
-            >
-              Give peer feedback
-            </Link>
-            <Link
-              href="/upward-review"
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold border border-black/20 bg-white"
-            >
-              Review my manager
-            </Link>
+      </div>
+
+      <section className="bg-white border border-black/10 rounded-xl p-5 mb-6">
+        <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">Your reviews this cycle</h3>
+        <p className="text-[13px] text-[var(--ink-soft)] mb-1">
+          Everything assigned to you, as set by HR or your manager. Upward and peer reviews stay anonymous — only you
+          can see that these are on your list.
+        </p>
+
+        {!rows && <div className="text-[var(--ink-soft)] text-sm py-8 text-center">Loading…</div>}
+
+        {rows && (
+          <div className="mt-2">
+            {viewerId && (
+              <AssignmentRow
+                type="Self review"
+                subtitle="Your own performance"
+                status={myRow?.selfStatus || "none"}
+                href={`/review/${viewerId}/self`}
+              />
+            )}
+
+            {upward?.managerName && (
+              <AssignmentRow
+                type="Upward review"
+                subtitle={`About ${upward.managerName} · anonymous`}
+                status={upward.draft?.status || "none"}
+                href="/upward-review"
+              />
+            )}
+
+            {myReports.map((r) => (
+              <AssignmentRow
+                key={r.id}
+                type="Manager review"
+                subtitle={`About ${r.name}`}
+                status={r.managerStatus}
+                href={`/review/${r.id}/manager`}
+              />
+            ))}
+
+            {(peerAssignments || []).map((p) => (
+              <AssignmentRow
+                key={p.employeeId}
+                type="Peer feedback"
+                subtitle={`About ${p.employeeName} · anonymous`}
+                status={p.submitted ? "submitted" : "none"}
+                href={`/peer-feedback?employeeId=${p.employeeId}&name=${encodeURIComponent(p.employeeName)}`}
+                submittedLabel="View / update"
+                pendingLabel="Give feedback"
+              />
+            ))}
+
+            {!hasAnyAssignment && (
+              <p className="text-[var(--ink-soft)] text-[13.5px] italic py-3">
+                Nothing assigned to you yet for this cycle.
+              </p>
+            )}
           </div>
         )}
-      </div>
+      </section>
 
       {isHrAdmin && (
         <div className="flex items-center gap-2 mb-4">
@@ -109,7 +194,9 @@ export default function DashboardPage() {
 
       <section className="bg-white border border-black/10 rounded-xl p-5">
         <header className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
-          <h3 className="font-[family-name:var(--font-display)] font-semibold text-base">Roster</h3>
+          <h3 className="font-[family-name:var(--font-display)] font-semibold text-base">
+            {isHrAdmin && viewMode === "admin" ? "Everyone" : "Direct reports"}
+          </h3>
           <input
             type="text"
             placeholder="Filter by name..."

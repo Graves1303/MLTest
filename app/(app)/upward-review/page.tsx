@@ -19,7 +19,7 @@ type Draft = {
   valuesComments: string;
   competencies: RatingMap;
   competenciesComments: string;
-  status: "draft" | "submitted";
+  status: "none" | "draft" | "submitted";
   submittedAt: string | null;
 };
 

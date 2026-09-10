@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 
 type Person = { id: string; name: string; title: string | null };
 
-export default function PeerFeedbackPage() {
+function PeerFeedbackInner() {
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Person[]>([]);
   const [selected, setSelected] = useState<Person | null>(null);
@@ -17,6 +19,15 @@ export default function PeerFeedbackPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    const id = searchParams.get("employeeId");
+    const name = searchParams.get("name");
+    if (id && name) {
+      pick({ id, name, title: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!query.trim() || selected) {
@@ -145,3 +156,12 @@ export default function PeerFeedbackPage() {
     </div>
   );
 }
+
+export default function PeerFeedbackPage() {
+  return (
+    <Suspense fallback={<div className="text-[var(--ink-soft)] text-sm py-8 text-center">Loading…</div>}>
+      <PeerFeedbackInner />
+    </Suspense>
+  );
+}
+
