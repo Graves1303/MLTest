@@ -28,8 +28,11 @@ export default function AdminPage() {
   const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState("");
   const [resettingPassword, setResettingPassword] = useState(false);
-  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  const [resetNotice, setResetNotice] = useState<{ name: string; email: string; password: string } | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     email: "",
@@ -42,7 +45,17 @@ export default function AdminPage() {
   });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createdNotice, setCreatedNotice] = useState<string | null>(null);
+  const [createdInfo, setCreatedInfo] = useState<{ name: string; email: string; temporaryPassword: string } | null>(null);
+
+  function passwordMailto(email: string, name: string, password: string) {
+    const subject = encodeURIComponent("Your Marine Layer Performance Review login");
+    const body =
+      `Hi ${name.split(" ")[0]},\n\n` +
+      `You've been added to the Marine Layer performance review system.\n\n` +
+      `Your temporary password is: ${password}\n\n` +
+      `You'll be asked to set a new password the first time you sign in.\n\nThanks!`;
+    return `mailto:${email}?subject=${subject}&body=${encodeURIComponent(body)}`;
+  }
 
   useEffect(() => {
     loadRoster();
@@ -61,13 +74,13 @@ export default function AdminPage() {
     e.preventDefault();
     setCreating(true);
     setCreateError(null);
-    setCreatedNotice(null);
+    setCreatedInfo(null);
     try {
       await api.post("/api/users", {
         ...form,
         managerId: form.managerId || null,
       });
-      setCreatedNotice(`${form.name} was added. Share this temporary password with them: ${form.temporaryPassword}`);
+      setCreatedInfo({ name: form.name, email: form.email, temporaryPassword: form.temporaryPassword });
       setForm({
         email: "",
         name: "",
@@ -101,17 +114,31 @@ export default function AdminPage() {
     setResetError(null);
   }
 
-  async function submitResetPassword(id: string, name: string) {
+  async function submitResetPassword(id: string, name: string, email: string) {
     setResettingPassword(true);
     setResetError(null);
     setResetNotice(null);
     try {
       await api.post(`/api/users/${id}/reset-password`, { newPassword: newPasswordValue });
-      setResetNotice(`New password set for ${name}. Share this with them: ${newPasswordValue}`);
+      setResetNotice({ name, email, password: newPasswordValue });
     } catch (err: any) {
       setResetError(err.message || "Couldn't reset that password.");
     } finally {
       setResettingPassword(false);
+    }
+  }
+
+  async function deleteUser(id: string) {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.delete(`/api/users/${id}`);
+      setConfirmDeleteId(null);
+      await loadRoster();
+    } catch (err: any) {
+      setDeleteError(err.message || "Couldn't delete that person.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -196,7 +223,19 @@ export default function AdminPage() {
           </label>
 
           {createError && <div className="sm:col-span-2 text-[var(--clay)] text-[13px] font-semibold">{createError}</div>}
-          {createdNotice && <div className="sm:col-span-2 text-[var(--pine)] text-[13px] font-semibold">{createdNotice}</div>}
+          {createdInfo && (
+            <div className="sm:col-span-2 bg-[rgba(90,96,106,0.08)] rounded-lg p-3">
+              <p className="text-[var(--pine)] text-[13px] font-semibold mb-1.5">
+                {createdInfo.name} was added. Share this temporary password with them: {createdInfo.temporaryPassword}
+              </p>
+              <a
+                href={passwordMailto(createdInfo.email, createdInfo.name, createdInfo.temporaryPassword)}
+                className="text-[var(--horizon)] text-[13px] font-semibold underline"
+              >
+                Open a pre-filled email to send it
+              </a>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -238,8 +277,34 @@ export default function AdminPage() {
                 >
                   {editingId === r.id ? "Close" : "Edit"}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setConfirmDeleteId(confirmDeleteId === r.id ? null : r.id); setDeleteError(null); }}
+                  className="text-[var(--clay)] text-[13px] font-semibold"
+                >
+                  {confirmDeleteId === r.id ? "Cancel" : "Delete"}
+                </button>
               </div>
             </div>
+            {confirmDeleteId === r.id && (
+              <div className="mt-3 bg-[rgba(198,58,63,0.06)] border border-[rgba(198,58,63,0.25)] rounded-lg p-3.5 max-w-md">
+                <p className="text-[13px] text-[var(--ink)] mb-2.5">
+                  Delete <strong>{r.name}</strong>? This removes their account, their self and manager reviews, and
+                  their peer/upward review data. Anyone reporting to them will show "no manager" until reassigned.
+                  This can't be undone.
+                </p>
+                {deleteError && <div className="text-[var(--clay)] text-[13px] font-semibold mb-2">{deleteError}</div>}
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => deleteUser(r.id)}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: "var(--clay)" }}
+                >
+                  {deleting ? "Deleting…" : "Yes, delete permanently"}
+                </button>
+              </div>
+            )}
             {resetPasswordId === r.id && (
               <div className="mt-3 bg-[var(--paper)] rounded-lg p-3.5 max-w-md">
                 <p className="text-[13px] text-[var(--ink-soft)] mb-2.5">
@@ -260,11 +325,23 @@ export default function AdminPage() {
                   </button>
                 </div>
                 {resetError && <div className="text-[var(--clay)] text-[13px] font-semibold mb-2">{resetError}</div>}
-                {resetNotice && <div className="text-[var(--pine)] text-[13px] font-semibold mb-2">{resetNotice}</div>}
+                {resetNotice && (
+                  <div className="mb-2">
+                    <p className="text-[var(--pine)] text-[13px] font-semibold mb-1">
+                      New password set for {resetNotice.name}. Share this with them: {resetNotice.password}
+                    </p>
+                    <a
+                      href={passwordMailto(resetNotice.email, resetNotice.name, resetNotice.password)}
+                      className="text-[var(--horizon)] text-[13px] font-semibold underline"
+                    >
+                      Open a pre-filled email to send it
+                    </a>
+                  </div>
+                )}
                 <button
                   type="button"
                   disabled={resettingPassword || newPasswordValue.length < 8}
-                  onClick={() => submitResetPassword(r.id, r.name)}
+                  onClick={() => submitResetPassword(r.id, r.name, r.email)}
                   className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                   style={{ background: "var(--horizon)" }}
                 >

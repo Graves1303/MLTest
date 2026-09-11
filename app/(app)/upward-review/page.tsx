@@ -35,6 +35,8 @@ function gradeColor(grade: string | null) {
 
 export default function UpwardReviewPage() {
   const [managerName, setManagerName] = useState<string | null>(null);
+  const [managerLevel, setManagerLevel] = useState<string | null>(null);
+  const [managerLevelContext, setManagerLevelContext] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -48,6 +50,8 @@ export default function UpwardReviewPage() {
       try {
         const res = await api.get("/api/upward/draft");
         setManagerName(res.managerName);
+        setManagerLevel(res.managerLevel);
+        setManagerLevelContext(res.managerLevelContext);
         setDraft(res.draft);
       } finally {
         firstLoad.current = true;
@@ -132,8 +136,13 @@ export default function UpwardReviewPage() {
           </div>
           <h2 className="font-[family-name:var(--font-headline)] text-2xl mb-1">{managerName}</h2>
           <div className="text-[var(--ink-soft)] text-[13.5px]">
-            Your response is never linked to your name — only aggregated, anonymized results are ever shared.
+            Your response is stored anonymously and will not be shown to your manager.
           </div>
+          {managerLevelContext && (
+            <div className="mt-2 max-w-lg bg-[var(--paper)] border border-black/10 rounded-lg px-3 py-2 text-[12.5px] text-[var(--ink-soft)] italic leading-snug">
+              {managerLevel ? `${managerLevel}: ` : ""}{managerLevelContext}
+            </div>
+          )}
         </div>
         <div className="bg-[var(--paper)] border border-black/10 rounded-lg px-5 py-3 text-center min-w-[140px]">
           <div className="font-[family-name:var(--font-display)] text-[28px] font-semibold leading-none" style={{ color: gradeColor(summary.overallGrade) }}>

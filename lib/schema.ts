@@ -46,6 +46,10 @@ export const reviews = pgTable(
     competencies: jsonb("competencies").notNull(),
     competenciesComments: text("competencies_comments").notNull().default(""),
     summary: text("summary").notNull().default(""),
+    // "yes" | "no" | "six_months" | "" — manager-review only. Admin + the
+    // authoring manager can see this; the employee being reviewed never can,
+    // regardless of discussed status. Stripped server-side, not just hidden.
+    promotionEligible: text("promotion_eligible").notNull().default(""),
     goals: jsonb("goals").notNull().default([]),
     status: text("status").notNull().default("draft"), // draft | submitted
     submittedAt: timestamp("submitted_at"),

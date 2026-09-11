@@ -31,4 +31,5 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(handle),
+  delete: (url: string) => fetch(url, { method: "DELETE", credentials: "include" }).then(handle),
 };

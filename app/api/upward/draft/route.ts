@@ -11,16 +11,24 @@ export async function GET() {
   if (!viewer) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   if (!viewer.managerId) {
-    return NextResponse.json({ managerName: null, draft: null });
+    return NextResponse.json({ managerName: null, managerLevel: null, managerLevelContext: null, draft: null });
   }
-  const mgrRows = await db.select({ name: users.name }).from(users).where(eq(users.id, viewer.managerId)).limit(1);
+  const mgrRows = await db
+    .select({ name: users.name, level: users.level, levelContext: users.levelContext })
+    .from(users)
+    .where(eq(users.id, viewer.managerId))
+    .limit(1);
   const managerName = mgrRows[0]?.name || null;
+  const managerLevel = mgrRows[0]?.level || null;
+  const managerLevelContext = mgrRows[0]?.levelContext || null;
 
   const rows = await db.select().from(upwardDrafts).where(eq(upwardDrafts.reporterId, viewer.id)).limit(1);
   const draft = rows[0] || null;
 
   return NextResponse.json({
     managerName,
+    managerLevel,
+    managerLevelContext,
     draft: draft
       ? {
           values: draft.values,

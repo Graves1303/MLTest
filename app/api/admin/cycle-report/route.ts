@@ -41,7 +41,7 @@ export async function GET() {
   }
 
   function scoresFor(row?: typeof reviewRows[number]) {
-    if (!row) return { status: "none", overallScore: null, overallGrade: null, submittedAt: null };
+    if (!row) return { status: "none", overallScore: null, overallGrade: null, submittedAt: null, promotionEligible: "" };
     const summary = computeSummary({
       values: row.values as RatingMap,
       competencies: row.competencies as RatingMap,
@@ -53,6 +53,7 @@ export async function GET() {
       overallScore: summary.overallScore,
       overallGrade: summary.overallGrade,
       submittedAt: row.submittedAt,
+      promotionEligible: row.promotionEligible || "",
     };
   }
 

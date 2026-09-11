@@ -9,6 +9,7 @@ type ReviewScore = {
   overallScore: number | null;
   overallGrade: string | null;
   submittedAt: string | null;
+  promotionEligible?: string;
 };
 type Row = {
   id: string;
@@ -81,10 +82,13 @@ export default function CycleOverviewPage() {
 
   function exportCsv() {
     if (!rows) return;
+    const promoLabel = (v: string) => (v === "yes" ? "Yes" : v === "no" ? "No" : v === "six_months" ? "6 Months" : "");
     const header = [
       "Name", "Email", "Title", "Level", "Manager",
       "Self status", "Self overall score", "Self overall grade", "Self submitted",
       "Manager status", "Manager overall score", "Manager overall grade", "Manager submitted",
+      "Eligible for promotion",
+      "Upward reviews collected", "Upward revealed", "Upward overall score", "Upward overall grade",
       "Cycle status",
     ];
     const lines = [header.join(",")];
@@ -94,6 +98,11 @@ export default function CycleOverviewPage() {
           csvCell(r.name), csvCell(r.email), csvCell(r.title), csvCell(r.level), csvCell(r.managerName),
           csvCell(statusLabel(r.self.status)), csvCell(r.self.overallScore), csvCell(r.self.overallGrade), csvCell(r.self.submittedAt),
           csvCell(statusLabel(r.manager.status)), csvCell(r.manager.overallScore), csvCell(r.manager.overallGrade), csvCell(r.manager.submittedAt),
+          csvCell(promoLabel(r.manager.promotionEligible || "")),
+          csvCell(r.upwardAgg.count),
+          csvCell(r.upwardAgg.revealed ? "yes" : "no"),
+          csvCell(r.upwardAgg.revealed ? r.upwardAgg.overallScore : ""),
+          csvCell(r.upwardAgg.revealed ? r.upwardAgg.overallGrade : ""),
           csvCell(r.cycleStatus.replace("_", " ")),
         ].join(",")
       );
@@ -153,8 +162,7 @@ export default function CycleOverviewPage() {
         <section className="bg-white border border-black/10 rounded-xl p-5 mb-6">
           <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold mb-1">Upward reviews</h3>
           <p className="text-[13px] text-[var(--ink-soft)] mb-3">
-            Anonymous — individual responses stay hidden (even from admin) until at least 3 have been submitted about
-            that person.
+            Stored anonymously, not shown to the person being reviewed — shown here as soon as any response comes in.
           </p>
           {rows
             .filter((r) => r.upwardAgg.count > 0)
@@ -165,12 +173,6 @@ export default function CycleOverviewPage() {
                     <div className="font-semibold text-sm">{r.name}</div>
                     <div className="text-[12.5px] text-[var(--ink-soft)]">{r.title || "—"}</div>
                   </div>
-                  <span
-                    className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold"
-                    style={r.upwardAgg.revealed ? { color: "var(--pine)", borderColor: "var(--pine)" } : { color: "var(--sand)", borderColor: "var(--sand)" }}
-                  >
-                    {r.upwardAgg.revealed ? "Revealed" : "Pending"}
-                  </span>
                   <span className="text-[13px] text-[var(--ink-soft)]">
                     {r.upwardAgg.count} response{r.upwardAgg.count === 1 ? "" : "s"}
                   </span>
@@ -263,6 +265,20 @@ export default function CycleOverviewPage() {
                     {r.manager.overallScore != null && (
                       <div className="font-[family-name:var(--font-display)] text-[12.5px]" style={{ color: gradeColor(r.manager.overallGrade) }}>
                         {fmt(r.manager.overallScore)} · {r.manager.overallGrade}
+                      </div>
+                    )}
+                    {r.manager.promotionEligible && (
+                      <div
+                        className="inline-flex mt-1 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold"
+                        style={
+                          r.manager.promotionEligible === "yes"
+                            ? { color: "var(--pine)", borderColor: "var(--pine)" }
+                            : r.manager.promotionEligible === "six_months"
+                            ? { color: "var(--sand)", borderColor: "var(--sand)" }
+                            : { color: "var(--ink-soft)", borderColor: "rgba(0,0,0,0.2)" }
+                        }
+                      >
+                        Promotion: {r.manager.promotionEligible === "yes" ? "Yes" : r.manager.promotionEligible === "six_months" ? "6 Months" : "No"}
                       </div>
                     )}
                   </div>

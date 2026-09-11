@@ -36,7 +36,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
       .limit(1);
     const row = rows[0] || null;
     const allowed = await canReadReview(currentViewer, employeeId, type, (row?.status as "draft" | "submitted") ?? null, row?.discussed ?? false);
-    return allowed ? row : null;
+    if (!allowed || !row) return allowed ? row : null;
+    if (currentViewer.id === employeeId) {
+      const { promotionEligible, ...rest } = row;
+      return rest as typeof row;
+    }
+    return row;
   }
 
   const [selfReview, managerReview] = await Promise.all([loadIfAllowed("self"), loadIfAllowed("manager")]);

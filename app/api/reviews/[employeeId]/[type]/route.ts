@@ -35,7 +35,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     return NextResponse.json({ error: "You don't have access to this review." }, { status: 403 });
   }
 
-  return NextResponse.json({ review: existing || null });
+  // The promotion-eligibility field is never shown to the person being
+  // reviewed, no matter their role or the discussed status — stripped here
+  // server-side, not just hidden in the UI.
+  let responseReview = existing;
+  if (existing && viewer.id === employeeId) {
+    const { promotionEligible, ...rest } = existing;
+    responseReview = rest as typeof existing;
+  }
+
+  return NextResponse.json({ review: responseReview || null });
 }
 
 const goalSchema = z.object({ id: z.string(), text: z.string(), timeline: z.string() });
@@ -51,6 +60,7 @@ const putSchema = z.object({
   competenciesComments: z.string().default(""),
   summary: z.string().default(""),
   goals: z.array(goalSchema).default([]),
+  promotionEligible: z.enum(["", "yes", "no", "six_months"]).default(""),
   submit: z.boolean().default(false),
   reopen: z.boolean().default(false),
 });
@@ -110,6 +120,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
         competenciesComments: data.competenciesComments,
         summary: data.summary,
         goals: data.goals,
+        promotionEligible: data.promotionEligible,
         status,
         submittedAt: data.submit ? now : existing.submittedAt,
         updatedAt: now,
@@ -127,6 +138,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
       competenciesComments: data.competenciesComments,
       summary: data.summary,
       goals: data.goals,
+      promotionEligible: data.promotionEligible,
       status,
       submittedAt: data.submit ? now : null,
       updatedAt: now,
@@ -134,5 +146,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
   }
 
   const saved = await findReview(employeeId, type);
-  return NextResponse.json({ review: saved });
+  let responseReview = saved;
+  if (saved && viewer.id === employeeId) {
+    const { promotionEligible, ...rest } = saved;
+    responseReview = rest as typeof saved;
+  }
+  return NextResponse.json({ review: responseReview });
 }

@@ -28,7 +28,11 @@ export const COMPETENCY_DEFINITIONS = [
   { name: "Producing Results", looksLike: ["Delivers accurate, high-quality work while maintaining a strong pace", "Consistently meets or exceeds the output expected for their role and level", "Meets deadlines, or flags risk to them early and clearly", "Follows through on commitments made to teammates and partners"] },
 ];
 
-export const UPWARD_MIN_REVEAL = 3;
+// No reveal threshold, by design: with only 1 response, "anonymous" is really
+// just "unattributed" — the manager's manager can often guess who wrote it if
+// there's only one report. That's an accepted tradeoff here, not an oversight —
+// see the user-facing copy on the submission and summary views, which says so.
+export const UPWARD_MIN_REVEAL = 1;
 
 // Fixed Level titles, each with an exact, non-editable Level Context — this
 // guarantees the two always correlate as defined, rather than being two

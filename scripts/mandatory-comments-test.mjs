@@ -62,7 +62,7 @@ async function main() {
   console.log("\n=== Both filled -> submission succeeds ===");
   res = await emp.fetch(`/api/reviews/${empId}/self`, {
     method: "PUT",
-    body: JSON.stringify({ ...ratings(3), valuesComments: "Solid values.", competenciesComments: "Solid competencies.", submit: true }),
+    body: JSON.stringify({ ...ratings(3), valuesComments: "Solid values.", competenciesComments: "Solid competencies.", summary: "Strong half overall.", submit: true }),
   });
   check("Both filled -> submits successfully", res.status === 200 && res.body.review.status === "submitted", res.body);
 

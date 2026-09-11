@@ -80,8 +80,8 @@ async function main() {
     values: { Fun: 3, Curiosity: 4, "Problem-Solving": 3, Collaboration: 4, Ownership: 3, Hustle: 3, Inclusivity: 4 },
     valuesComments: "Felt good about this half.",
     competencies: { "Drive": 3, "Communication & Command": 3, "Time Management & Prioritization": 3, "Adaptability + Change Management": 3, "Career Growth & Learning": 4, "Producing Results": 3 },
-    competenciesComments: "",
-    summary: "",
+    competenciesComments: "Solid on competencies too.",
+    summary: "Overall a strong half.",
     goals: [{ id: "g1", text: "Ship the new onboarding flow", timeline: "Q4 2026" }],
     submit: false,
   };
@@ -116,8 +116,8 @@ async function main() {
     values: { Fun: 3, Curiosity: 3, "Problem-Solving": 3, Collaboration: 3, Ownership: 3, Hustle: 3, Inclusivity: 3 },
     valuesComments: "Draft — not ready for the employee to see yet.",
     competencies: { "Drive": 3, "Communication & Command": 3, "Time Management & Prioritization": 3, "Adaptability + Change Management": 3, "Career Growth & Learning": 3, "Producing Results": 3 },
-    competenciesComments: "",
-    summary: "",
+    competenciesComments: "Also still drafting this part.",
+    summary: "Draft summary, not final.",
     goals: [],
     submit: false,
   };

@@ -32,10 +32,10 @@ async function login(email, password) {
 
 const emptyRatings = {
   values: { Fun: 3, Curiosity: 3, "Problem-Solving": 3, Collaboration: 3, Ownership: 3, Hustle: 3, Inclusivity: 3 },
-  valuesComments: "",
+  valuesComments: "Solid on values.",
   competencies: { "Drive": 3, "Communication & Command": 3, "Time Management & Prioritization": 3, "Adaptability + Change Management": 3, "Career Growth & Learning": 3, "Producing Results": 3 },
-  competenciesComments: "",
-  summary: "",
+  competenciesComments: "Solid on competencies.",
+  summary: "Overall solid.",
   goals: [],
 };
 
@@ -115,6 +115,7 @@ async function main() {
     for (const k of Object.keys(ratings.values)) ratings.values[k] = ratingVal;
     for (const k of Object.keys(ratings.competencies)) ratings.competencies[k] = ratingVal;
     ratings.valuesComments = `${name} says: leadership feedback here.`;
+    ratings.competenciesComments = `${name} says: competency feedback here.`;
     await session.fetch("/api/upward/draft", { method: "PUT", body: JSON.stringify(ratings) });
     return session.fetch("/api/upward/submit", { method: "POST", body: JSON.stringify({ reopen: false }) });
   }

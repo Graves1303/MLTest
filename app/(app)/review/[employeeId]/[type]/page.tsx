@@ -7,6 +7,7 @@ import { api } from "@/lib/api-client";
 import CategoryPanel from "@/components/CategoryPanel";
 import GoalsEditor from "@/components/GoalsEditor";
 import PeerFeedbackPanel from "@/components/PeerFeedbackPanel";
+import UpwardSummaryPanel from "@/components/UpwardSummaryPanel";
 import ScaleLegend from "@/components/ScaleLegend";
 import {
   VALUES_ITEMS,
@@ -26,6 +27,7 @@ type ReviewState = {
   competenciesComments: string;
   summary: string;
   goals: Goal[];
+  promotionEligible?: "" | "yes" | "no" | "six_months";
   status: "draft" | "submitted";
   submittedAt: string | null;
   discussed?: boolean;
@@ -40,6 +42,7 @@ function emptyReview(): ReviewState {
     competenciesComments: "",
     summary: "",
     goals: [],
+    promotionEligible: "",
     status: "draft",
     submittedAt: null,
   };
@@ -112,6 +115,7 @@ export default function ReviewFormPage() {
           competenciesComments: data.competenciesComments,
           summary: data.summary,
           goals: data.goals,
+          promotionEligible: data.promotionEligible || "",
           submit: !!opts.submit,
           reopen: !!opts.reopen,
         });
@@ -189,6 +193,11 @@ export default function ReviewFormPage() {
           <div className="text-[var(--ink-soft)] text-[13.5px]">
             {employee.title || "—"} · Level: {employee.level || "—"} · Manager: {employee.managerName || "—"}
           </div>
+          {employee.levelContext && (
+            <div className="mt-2 max-w-lg bg-[var(--paper)] border border-black/10 rounded-lg px-3 py-2 text-[12.5px] text-[var(--ink-soft)] italic leading-snug">
+              {employee.level ? `${employee.level}: ` : ""}{employee.levelContext}
+            </div>
+          )}
         </div>
         <div className="bg-[var(--paper)] border border-black/10 rounded-lg px-5 py-3 text-center min-w-[140px]">
           <div className="font-[family-name:var(--font-display)] text-[28px] font-semibold leading-none" style={{ color: gradeColor(summary.overallGrade) }}>
@@ -293,7 +302,37 @@ export default function ReviewFormPage() {
         onChange={(goals) => setReview((r) => (r ? { ...r, goals } : r))}
       />
 
+      {reviewType === "manager" && (
+        <section className="bg-white border border-black/10 rounded-xl p-5 mb-4">
+          <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">Eligible for promotion?</h3>
+          <p className="text-[13px] text-[var(--ink-soft)] italic mb-3">
+            Visible only to you and HR admins — {employee.name.split(" ")[0]} will never see this section, even after
+            this review is discussed with them.
+          </p>
+          <div className="flex gap-2">
+            {(["yes", "no", "six_months"] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                disabled={readOnly}
+                onClick={() => setReview((r) => (r ? { ...r, promotionEligible: r.promotionEligible === opt ? "" : opt } : r))}
+                className="rounded-lg px-4 py-2 text-sm font-semibold border disabled:cursor-default"
+                style={
+                  review.promotionEligible === opt
+                    ? { background: "var(--horizon)", borderColor: "var(--horizon)", color: "#fff" }
+                    : { background: "var(--surface)", borderColor: "rgba(0,0,0,0.18)", color: "var(--ink)" }
+                }
+              >
+                {opt === "yes" ? "Yes" : opt === "no" ? "No" : "6 Months"}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {reviewType === "manager" && <PeerFeedbackPanel employeeId={employeeId} employeeName={employee.name} />}
+
+      {reviewType === "manager" && <UpwardSummaryPanel employeeId={employeeId} employeeName={employee.name} />}
 
       <div className="flex items-center justify-between gap-4 flex-wrap mt-2">
         <span className="font-[family-name:var(--font-display)] text-[12.5px] text-[var(--ink-soft)]">
