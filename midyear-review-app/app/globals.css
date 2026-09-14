@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,600&display=swap');
+@import "tailwindcss";
+
+:root {
+  --paper: #FFFBF3;
+  --surface: #FFFFFF;
+  --ink: #2C3849;
+  --ink-soft: #5C6B80;
+  --dawn: #FFDA59;
+  --horizon: #3F4E63;
+  --denim: #7C93AF;
+  --horizon-bright: #FFB007;
+  --sand: #E78835;
+  --clay: #C63A3F;
+  --pine: #5A606A;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-dawn: var(--dawn);
+  --color-horizon: var(--horizon);
+  --color-denim: var(--denim);
+  --color-horizon-bright: var(--horizon-bright);
+  --color-sand: var(--sand);
+  --color-clay: var(--clay);
+  --color-pine: var(--pine);
+  --font-display: 'Poppins', sans-serif;
+  --font-headline: 'Fraunces', serif;
+  --font-body: 'Poppins', sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Poppins', sans-serif;
+}
+
+button {
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: 'Poppins', sans-serif;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--denim);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
