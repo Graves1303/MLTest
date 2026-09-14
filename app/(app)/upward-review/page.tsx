@@ -6,20 +6,15 @@ import { api } from "@/lib/api-client";
 import CategoryPanel from "@/components/CategoryPanel";
 import ScaleLegend from "@/components/ScaleLegend";
 import {
-  VALUES_ITEMS,
-  COMPETENCY_ITEMS,
-  VALUES_DEFINITIONS,
-  COMPETENCY_DEFINITIONS,
-  computeSummary,
-  type RatingMap,
+  computeCategorySummary,
+  type CategoryData,
+  type CategoryDef,
 } from "@/lib/domain";
 
 type Draft = {
-  values: RatingMap;
-  valuesComments: string;
-  competencies: RatingMap;
-  competenciesComments: string;
+  categoryData: CategoryData;
   status: "none" | "draft" | "submitted";
+  locked?: boolean;
   submittedAt: string | null;
 };
 
@@ -37,6 +32,7 @@ export default function UpwardReviewPage() {
   const [managerName, setManagerName] = useState<string | null>(null);
   const [managerLevel, setManagerLevel] = useState<string | null>(null);
   const [managerLevelContext, setManagerLevelContext] = useState<string | null>(null);
+  const [categories, setCategories] = useState<CategoryDef[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -52,6 +48,7 @@ export default function UpwardReviewPage() {
         setManagerName(res.managerName);
         setManagerLevel(res.managerLevel);
         setManagerLevelContext(res.managerLevelContext);
+        setCategories(res.categories || []);
         setDraft(res.draft);
       } finally {
         firstLoad.current = true;
@@ -60,18 +57,13 @@ export default function UpwardReviewPage() {
     })();
   }, []);
 
-  const summary = draft ? computeSummary(draft) : computeSummary(null);
+  const summary = computeCategorySummary(draft?.categoryData, categories.map((c) => c.key));
 
   const persist = useCallback(async (data: Draft, submit: boolean) => {
     setSaveState("saving");
     setSaveError(null);
     try {
-      await api.put("/api/upward/draft", {
-        values: data.values,
-        valuesComments: data.valuesComments,
-        competencies: data.competencies,
-        competenciesComments: data.competenciesComments,
-      });
+      await api.put("/api/upward/draft", { categoryData: data.categoryData });
       if (submit) {
         const res = await api.post("/api/upward/submit", { reopen: false });
         setDraft((d) => (d ? { ...d, status: res.status, submittedAt: new Date().toISOString() } : d));
@@ -115,13 +107,7 @@ export default function UpwardReviewPage() {
 
   if (!draft) return null;
   const readOnly = draft.status === "submitted";
-
-  function changeItem(catKey: "values" | "competencies", item: string, value: number | null) {
-    setDraft((d) => (d ? { ...d, [catKey]: { ...d[catKey], [item]: value } } : d));
-  }
-  function changeComments(key: "valuesComments" | "competenciesComments", value: string) {
-    setDraft((d) => (d ? { ...d, [key]: value } : d));
-  }
+  const canSubmit = categories.every((c) => draft.categoryData[c.key]?.comments?.trim());
 
   return (
     <div>
@@ -157,16 +143,37 @@ export default function UpwardReviewPage() {
       {readOnly && (
         <div className="flex items-center gap-2.5 bg-[var(--pine)]/10 text-[var(--ink)] border border-[var(--pine)]/25 rounded-lg px-3.5 py-2.5 text-[13px] font-semibold mb-5">
           <span>Submitted anonymously {draft.submittedAt ? new Date(draft.submittedAt).toLocaleDateString() : ""}</span>
-          <button type="button" onClick={reopen} className="ml-auto underline text-xs font-semibold">
-            Reopen for edits
-          </button>
+          {!draft.locked ? (
+            <button type="button" onClick={reopen} className="ml-auto underline text-xs font-semibold">
+              Reopen for edits
+            </button>
+          ) : (
+            <span className="ml-auto text-[12.5px] italic">Locked — ask HR to unlock it if you need to change it.</span>
+          )}
         </div>
       )}
 
       <ScaleLegend />
 
-      <CategoryPanel label="Values" items={VALUES_ITEMS} ratings={draft.values} comments={draft.valuesComments} readOnly={readOnly} definitions={VALUES_DEFINITIONS} onChangeItem={(item, v) => changeItem("values", item, v)} onChangeComments={(v) => changeComments("valuesComments", v)} />
-      <CategoryPanel label="Competencies" items={COMPETENCY_ITEMS} ratings={draft.competencies} comments={draft.competenciesComments} readOnly={readOnly} definitions={COMPETENCY_DEFINITIONS} onChangeItem={(item, v) => changeItem("competencies", item, v)} onChangeComments={(v) => changeComments("competenciesComments", v)} />
+      {categories.map((cat) => (
+        <CategoryPanel
+          key={cat.key}
+          label={cat.label}
+          items={cat.items}
+          ratings={draft.categoryData[cat.key]?.ratings || {}}
+          comments={draft.categoryData[cat.key]?.comments || ""}
+          readOnly={readOnly}
+          definitions={cat.definitions}
+          onChangeItem={(item, v) =>
+            setDraft((d) =>
+              d ? { ...d, categoryData: { ...d.categoryData, [cat.key]: { ...d.categoryData[cat.key], ratings: { ...d.categoryData[cat.key]?.ratings, [item]: v } } } } : d
+            )
+          }
+          onChangeComments={(v) =>
+            setDraft((d) => (d ? { ...d, categoryData: { ...d.categoryData, [cat.key]: { ...d.categoryData[cat.key], comments: v } } } : d))
+          }
+        />
+      ))}
 
       <div className="flex items-center justify-between gap-4 flex-wrap mt-2">
         <span className="font-[family-name:var(--font-display)] text-[12.5px] text-[var(--ink-soft)]">
@@ -181,7 +188,7 @@ export default function UpwardReviewPage() {
             </button>
             <button
               type="button"
-              disabled={!draft.valuesComments.trim() || !draft.competenciesComments.trim()}
+              disabled={!canSubmit}
               onClick={() => persist(draft, true)}
               className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               style={{ background: "var(--horizon)" }}

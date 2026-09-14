@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { reviews, users } from "@/lib/schema";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { visibleEmployeeIds } from "@/lib/permissions";
+import { getCurrentCycle } from "@/lib/cycles";
 
 export async function GET() {
   const viewer = await getCurrentUser();
@@ -21,13 +22,15 @@ export async function GET() {
           .from(users)
           .where(inArray(users.id, visible));
 
+  const currentCycle = await getCurrentCycle();
   const ids = people.map((p) => p.id);
-  const reviewRows = ids.length
-    ? await db
-        .select({ employeeId: reviews.employeeId, reviewerType: reviews.reviewerType, status: reviews.status })
-        .from(reviews)
-        .where(inArray(reviews.employeeId, ids))
-    : [];
+  const reviewRows =
+    ids.length && currentCycle
+      ? await db
+          .select({ employeeId: reviews.employeeId, reviewerType: reviews.reviewerType, status: reviews.status })
+          .from(reviews)
+          .where(and(inArray(reviews.employeeId, ids), eq(reviews.cycleId, currentCycle.id)))
+      : [];
 
   const statusByEmployee: Record<string, { self?: string; manager?: string }> = {};
   for (const r of reviewRows) {

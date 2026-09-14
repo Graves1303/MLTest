@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 import ImportRosterPanel from "@/components/ImportRosterPanel";
-import { LEVEL_CONTEXTS, contextForLevel } from "@/lib/domain";
+import { getTemplate, contextForLevel, templateOptions } from "@/lib/domain";
 
 type UserRow = {
   id: string;
@@ -12,6 +12,7 @@ type UserRow = {
   title: string | null;
   level: string | null;
   levelContext: string | null;
+  templateKey: string | null;
   isHrAdmin: boolean;
   managerId: string | null;
 };
@@ -33,11 +34,13 @@ export default function AdminPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [unlockUpwardNotice, setUnlockUpwardNotice] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     email: "",
     name: "",
     title: "",
+    templateKey: "corporate",
     level: "",
     managerId: "",
     isHrAdmin: false,
@@ -85,6 +88,7 @@ export default function AdminPage() {
         email: "",
         name: "",
         title: "",
+        templateKey: "corporate",
         level: "",
         managerId: "",
         isHrAdmin: false,
@@ -142,6 +146,16 @@ export default function AdminPage() {
     }
   }
 
+  async function unlockUpward(id: string, name: string) {
+    setUnlockUpwardNotice(null);
+    try {
+      await api.post(`/api/users/${id}/unlock-upward`);
+      setUnlockUpwardNotice(`${name}'s upward review is unlocked for one more edit.`);
+    } catch (err: any) {
+      setUnlockUpwardNotice(err.message || "Couldn't unlock that.");
+    }
+  }
+
   return (
     <div>
       <h2 className="font-[family-name:var(--font-display)] text-2xl mb-1">Roster admin</h2>
@@ -182,10 +196,22 @@ export default function AdminPage() {
             <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm" />
           </label>
           <label className="block">
+            <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Review template</span>
+            <select
+              value={form.templateKey}
+              onChange={(e) => setForm({ ...form, templateKey: e.target.value, level: "" })}
+              className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              {templateOptions().map((t) => (
+                <option key={t.key} value={t.key}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
             <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Level</span>
             <select value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm bg-white">
               <option value="">— Select level —</option>
-              {LEVEL_CONTEXTS.map((l) => (
+              {getTemplate(form.templateKey).levels.map((l) => (
                 <option key={l.level} value={l.level}>{l.level}</option>
               ))}
             </select>
@@ -194,7 +220,7 @@ export default function AdminPage() {
             <label className="block sm:col-span-2">
               <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Level context</span>
               <div className="w-full border border-black/12 rounded-lg px-3 py-2 text-[13px] text-[var(--ink-soft)] italic bg-[var(--paper)]">
-                {contextForLevel(form.level)}
+                {contextForLevel(form.templateKey, form.level)}
               </div>
             </label>
           )}
@@ -250,6 +276,9 @@ export default function AdminPage() {
 
       <section className="bg-white border border-black/10 rounded-xl p-5">
         <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-3">Everyone on the roster</h3>
+        {unlockUpwardNotice && (
+          <div className="text-[13px] font-semibold text-[var(--pine)] mb-3">{unlockUpwardNotice}</div>
+        )}
         {error && <div className="text-[var(--clay)] text-sm font-semibold mb-3">{error}</div>}
         {rows.map((r) => (
           <div key={r.id} className="py-3 border-t border-black/[0.08] first:border-t-0">
@@ -269,6 +298,13 @@ export default function AdminPage() {
                   className="text-[var(--horizon)] text-[13px] font-semibold"
                 >
                   {resetPasswordId === r.id ? "Close" : "Reset password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => unlockUpward(r.id, r.name)}
+                  className="text-[var(--horizon)] text-[13px] font-semibold"
+                >
+                  Unlock upward review
                 </button>
                 <button
                   type="button"
@@ -352,6 +388,18 @@ export default function AdminPage() {
             {editingId === r.id && (
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[var(--paper)] rounded-lg p-3.5">
                 <label className="block">
+                  <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1">Review template</span>
+                  <select
+                    defaultValue={r.templateKey || "corporate"}
+                    onChange={(e) => updateUser(r.id, { templateKey: e.target.value, level: "" } as any)}
+                    className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    {templateOptions().map((t) => (
+                      <option key={t.key} value={t.key}>{t.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
                   <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1">Level</span>
                   <select
                     defaultValue={r.level || ""}
@@ -359,7 +407,7 @@ export default function AdminPage() {
                     className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm bg-white"
                   >
                     <option value="">— Select level —</option>
-                    {LEVEL_CONTEXTS.map((l) => (
+                    {getTemplate(r.templateKey).levels.map((l) => (
                       <option key={l.level} value={l.level}>{l.level}</option>
                     ))}
                   </select>
@@ -377,9 +425,9 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </label>
-                {r.level && contextForLevel(r.level) && (
+                {r.level && contextForLevel(r.templateKey, r.level) && (
                   <div className="sm:col-span-2 text-[13px] text-[var(--ink-soft)] italic">
-                    Level context: {contextForLevel(r.level)}
+                    Level context: {contextForLevel(r.templateKey, r.level)}
                   </div>
                 )}
                 <label className="flex items-center gap-2 mt-1">

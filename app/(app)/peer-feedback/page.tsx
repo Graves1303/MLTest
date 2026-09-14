@@ -14,6 +14,7 @@ function PeerFeedbackInner() {
   const [selected, setSelected] = useState<Person | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [strengths, setStrengths] = useState("");
   const [growth, setGrowth] = useState("");
   const [error, setError] = useState("");
@@ -55,6 +56,7 @@ function PeerFeedbackInner() {
       const status = await api.get(`/api/peer-feedback/${p.id}/submit`);
       setEligible(status.eligible);
       setAlreadySubmitted(!!status.submitted);
+      setLocked(!!status.locked);
       setStrengths(status.strengths || "");
       setGrowth(status.growth || "");
     } catch {
@@ -70,6 +72,7 @@ function PeerFeedbackInner() {
       await api.post(`/api/peer-feedback/${selected.id}/submit`, { strengths, growth });
       setDone(true);
       setAlreadySubmitted(true);
+      setLocked(true);
     } catch (err: any) {
       setError(err.message || "Couldn't submit.");
     } finally {
@@ -131,26 +134,34 @@ function PeerFeedbackInner() {
               Your feedback has been submitted anonymously. Nothing you wrote is linked to your name.
             </div>
           )}
+          {alreadySubmitted && locked && (
+            <div className="bg-[rgba(198,58,63,0.06)] border border-[rgba(198,58,63,0.25)] rounded-xl p-4 text-[13px] text-[var(--ink)]">
+              You've already submitted this, and it's locked. Ask {selected.name.split(" ")[0]}'s manager or HR to
+              unlock it if you need to make a change.
+            </div>
+          )}
           <label className="block">
             <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">
               What were {selected.name.split(" ")[0]}'s biggest strengths this year?
             </span>
-            <textarea rows={4} value={strengths} onChange={(e) => setStrengths(e.target.value)} placeholder="Strengths, wins, standout moments..." className="w-full border border-black/18 rounded-lg px-3 py-2.5 text-sm" />
+            <textarea rows={4} disabled={locked} value={strengths} onChange={(e) => setStrengths(e.target.value)} placeholder="Strengths, wins, standout moments..." className="w-full border border-black/18 rounded-lg px-3 py-2.5 text-sm disabled:bg-black/[0.03] disabled:text-[var(--ink-soft)]" />
           </label>
           <label className="block">
             <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Where do they have opportunities to develop &amp; grow?</span>
-            <textarea rows={4} value={growth} onChange={(e) => setGrowth(e.target.value)} placeholder="Growth areas, opportunities..." className="w-full border border-black/18 rounded-lg px-3 py-2.5 text-sm" />
+            <textarea rows={4} disabled={locked} value={growth} onChange={(e) => setGrowth(e.target.value)} placeholder="Growth areas, opportunities..." className="w-full border border-black/18 rounded-lg px-3 py-2.5 text-sm disabled:bg-black/[0.03] disabled:text-[var(--ink-soft)]" />
           </label>
           {error && <div className="text-[var(--clay)] text-[13px] font-semibold">{error}</div>}
-          <button
-            type="button"
-            disabled={saving || !strengths.trim() || !growth.trim()}
-            onClick={submit}
-            className="self-start rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            style={{ background: "var(--horizon)" }}
-          >
-            {saving ? "Submitting…" : alreadySubmitted ? "Update my anonymous feedback" : "Submit anonymously"}
-          </button>
+          {!locked && (
+            <button
+              type="button"
+              disabled={saving || !strengths.trim() || !growth.trim()}
+              onClick={submit}
+              className="self-start rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: "var(--horizon)" }}
+            >
+              {saving ? "Submitting…" : alreadySubmitted ? "Update my anonymous feedback" : "Submit anonymously"}
+            </button>
+          )}
         </div>
       )}
     </div>

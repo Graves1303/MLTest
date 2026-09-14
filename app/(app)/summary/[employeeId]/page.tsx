@@ -4,13 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
-import { computeSummary, type RatingMap, type Goal } from "@/lib/domain";
+import { computeCategorySummary, type CategoryData, type CategoryDef, type Goal } from "@/lib/domain";
 
 type ReviewData = {
-  values: RatingMap;
-  valuesComments: string;
-  competencies: RatingMap;
-  competenciesComments: string;
+  categoryData: CategoryData;
   summary: string;
   goals: Goal[];
   status: string;
@@ -34,6 +31,7 @@ export default function SummaryPage() {
   const [employee, setEmployee] = useState<{ name: string; title: string | null; level: string | null } | null>(null);
   const [selfReview, setSelfReview] = useState<ReviewData>(null);
   const [managerReview, setManagerReview] = useState<ReviewData>(null);
+  const [categories, setCategories] = useState<CategoryDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +44,7 @@ export default function SummaryPage() {
         setEmployee(data.employee);
         setSelfReview(data.selfReview);
         setManagerReview(data.managerReview);
+        setCategories(data.categories || []);
       } catch (err: any) {
         setError(err.message || "Couldn't load this summary.");
       } finally {
@@ -70,13 +69,9 @@ export default function SummaryPage() {
     );
   }
 
-  const selfSummary = computeSummary(selfReview);
-  const mgrSummary = computeSummary(managerReview);
-
-  const rows: { label: string; key: "valuesOverall" | "competenciesOverall" }[] = [
-    { label: "Values", key: "valuesOverall" },
-    { label: "Competencies", key: "competenciesOverall" },
-  ];
+  const categoryKeys = categories.map((c) => c.key);
+  const selfSummary = computeCategorySummary(selfReview?.categoryData, categoryKeys);
+  const mgrSummary = computeCategorySummary(managerReview?.categoryData, categoryKeys);
 
   const allGoals = [
     ...(selfReview?.goals || []).map((g) => ({ ...g, owner: "Employee" })),
@@ -132,11 +127,11 @@ export default function SummaryPage() {
           <div className="text-center">Self</div>
           <div className="text-center">Manager</div>
         </div>
-        {rows.map((row) => (
-          <div key={row.key} className="grid grid-cols-[1fr_100px_100px] items-center py-2.5 border-t border-black/[0.07]">
-            <div className="text-[14.5px]">{row.label}</div>
-            <div className="font-[family-name:var(--font-display)] text-sm font-semibold text-center">{fmt(selfSummary[row.key])}</div>
-            <div className="font-[family-name:var(--font-display)] text-sm font-semibold text-center">{fmt(mgrSummary[row.key])}</div>
+        {categories.map((cat) => (
+          <div key={cat.key} className="grid grid-cols-[1fr_100px_100px] items-center py-2.5 border-t border-black/[0.07]">
+            <div className="text-[14.5px]">{cat.label}</div>
+            <div className="font-[family-name:var(--font-display)] text-sm font-semibold text-center">{fmt(selfSummary.categoryOveralls[cat.key])}</div>
+            <div className="font-[family-name:var(--font-display)] text-sm font-semibold text-center">{fmt(mgrSummary.categoryOveralls[cat.key])}</div>
           </div>
         ))}
       </section>
@@ -144,25 +139,29 @@ export default function SummaryPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <section className="bg-white border border-black/10 rounded-xl p-5">
           <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-3">Employee comments</h3>
-          {(["valuesComments", "competenciesComments", "summary"] as const).map((k, i) => (
-            <div key={k} className="mb-3">
-              <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wide text-[var(--ink-soft)]">
-                {["Values", "Competencies", "Summary"][i]}
-              </div>
-              <p className="text-sm mt-1">{selfReview?.[k] || "—"}</p>
+          {categories.map((cat) => (
+            <div key={cat.key} className="mb-3">
+              <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wide text-[var(--ink-soft)]">{cat.label}</div>
+              <p className="text-sm mt-1">{selfReview?.categoryData?.[cat.key]?.comments || "—"}</p>
             </div>
           ))}
+          <div className="mb-3">
+            <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wide text-[var(--ink-soft)]">Summary</div>
+            <p className="text-sm mt-1">{selfReview?.summary || "—"}</p>
+          </div>
         </section>
         <section className="bg-white border border-black/10 rounded-xl p-5">
           <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-3">Manager comments</h3>
-          {(["valuesComments", "competenciesComments", "summary"] as const).map((k, i) => (
-            <div key={k} className="mb-3">
-              <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wide text-[var(--ink-soft)]">
-                {["Values", "Competencies", "Summary"][i]}
-              </div>
-              <p className="text-sm mt-1">{managerReview?.[k] || "—"}</p>
+          {categories.map((cat) => (
+            <div key={cat.key} className="mb-3">
+              <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wide text-[var(--ink-soft)]">{cat.label}</div>
+              <p className="text-sm mt-1">{managerReview?.categoryData?.[cat.key]?.comments || "—"}</p>
             </div>
           ))}
+          <div className="mb-3">
+            <div className="font-[family-name:var(--font-display)] text-[11px] uppercase tracking-wide text-[var(--ink-soft)]">Summary</div>
+            <p className="text-sm mt-1">{managerReview?.summary || "—"}</p>
+          </div>
         </section>
       </div>
 

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "drizzle-kit push",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "migrate-categories": "tsx scripts/migrate-to-category-data.ts",
+    "migrate-cycles": "tsx scripts/migrate-cycles.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

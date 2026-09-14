@@ -32,6 +32,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       title: users.title,
       level: users.level,
       levelContext: users.levelContext,
+      templateKey: users.templateKey,
       isHrAdmin: users.isHrAdmin,
       managerId: users.managerId,
     })
@@ -54,6 +55,7 @@ const patchSchema = z.object({
   name: z.string().min(1).optional(),
   title: z.string().optional(),
   level: z.string().optional(),
+  templateKey: z.string().optional(),
   managerId: z.string().nullable().optional(),
   isHrAdmin: z.boolean().optional(),
 });
@@ -79,9 +81,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const patch: Record<string, unknown> = { ...parsed.data };
-  if (typeof patch.level === "string") {
-    patch.level = canonicalLevel(patch.level as string);
-    patch.levelContext = contextForLevel(patch.level as string);
+  if (typeof patch.level === "string" || typeof patch.templateKey === "string") {
+    const existingRows = await db.select({ level: users.level, templateKey: users.templateKey }).from(users).where(eq(users.id, id)).limit(1);
+    const effectiveTemplateKey = (patch.templateKey as string) ?? existingRows[0]?.templateKey ?? "corporate";
+    const effectiveLevel = (patch.level as string) ?? existingRows[0]?.level ?? "";
+    patch.level = canonicalLevel(effectiveTemplateKey, effectiveLevel);
+    patch.levelContext = contextForLevel(effectiveTemplateKey, effectiveLevel);
   }
 
   await db.update(users).set(patch).where(eq(users.id, id));

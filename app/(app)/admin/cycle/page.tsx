@@ -52,6 +52,8 @@ function csvCell(value: string | number | null) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+type Cycle = { id: string; name: string; startDate: string; endDate: string; status: "open" | "closed"; closedAt: string | null; createdAt: string };
+
 export default function CycleOverviewPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +61,77 @@ export default function CycleOverviewPage() {
   const [query, setQuery] = useState("");
   const [expandedUpwardId, setExpandedUpwardId] = useState<string | null>(null);
 
+  const [cycles, setCycles] = useState<Cycle[] | null>(null);
+  const [currentCycleId, setCurrentCycleId] = useState<string | null>(null);
+  const [viewingCycleId, setViewingCycleId] = useState<string | null>(null);
+  const [confirmingCloseReopen, setConfirmingCloseReopen] = useState(false);
+  const [closingOrReopening, setClosingOrReopening] = useState(false);
+  const [showStartForm, setShowStartForm] = useState(false);
+  const [newCycleName, setNewCycleName] = useState("");
+  const [newCycleStart, setNewCycleStart] = useState("");
+  const [newCycleEnd, setNewCycleEnd] = useState("");
+  const [startingCycle, setStartingCycle] = useState(false);
+  const [startCycleError, setStartCycleError] = useState<string | null>(null);
+
+  const current = cycles?.find((c) => c.id === currentCycleId) || null;
+  const viewing = cycles?.find((c) => c.id === viewingCycleId) || null;
+  const isViewingCurrent = viewingCycleId === currentCycleId;
+  const pastCycles = (cycles || []).filter((c) => c.id !== currentCycleId);
+
   useEffect(() => {
-    api
-      .get("/api/admin/cycle-report")
-      .then(setRows)
-      .catch((err) => setError(err.message));
+    loadCycles();
   }, []);
+
+  useEffect(() => {
+    if (!viewingCycleId) return;
+    setRows(null);
+    api
+      .get(`/api/admin/cycles/${viewingCycleId}/report`)
+      .then((res) => setRows(res.rows))
+      .catch((err) => setError(err.message));
+  }, [viewingCycleId]);
+
+  async function loadCycles() {
+    try {
+      const res = await api.get("/api/admin/cycles");
+      setCycles(res.cycles);
+      setCurrentCycleId(res.currentCycleId);
+      setViewingCycleId((prev) => prev || res.currentCycleId);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function closeOrReopenCycle() {
+    setClosingOrReopening(true);
+    try {
+      await api.post(current?.status === "open" ? "/api/admin/cycles/close" : "/api/admin/cycles/reopen", {});
+      setConfirmingCloseReopen(false);
+      await loadCycles();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setClosingOrReopening(false);
+    }
+  }
+
+  async function startNewCycle() {
+    setStartingCycle(true);
+    setStartCycleError(null);
+    try {
+      const res = await api.post("/api/admin/cycles", { name: newCycleName, startDate: newCycleStart, endDate: newCycleEnd });
+      setShowStartForm(false);
+      setNewCycleName("");
+      setNewCycleStart("");
+      setNewCycleEnd("");
+      setViewingCycleId(res.cycle.id);
+      await loadCycles();
+    } catch (err: any) {
+      setStartCycleError(err.message || "Couldn't start that cycle.");
+    } finally {
+      setStartingCycle(false);
+    }
+  }
 
   const stats = useMemo(() => {
     if (!rows) return null;
@@ -139,6 +206,126 @@ export default function CycleOverviewPage() {
           Export CSV
         </button>
       </div>
+
+      {cycles && (
+        <section className="border rounded-xl p-5 mb-4 bg-white border-black/10">
+          {current ? (
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">
+                  {current.name} · {current.status === "open" ? "Open" : "Closed"}
+                </h3>
+                <p className="text-[13px] text-[var(--ink-soft)]">
+                  {current.startDate} – {current.endDate}
+                  {current.status === "open"
+                    ? " — close this cycle when you're ready to freeze all reviews and start a new one."
+                    : ` — closed${current.closedAt ? " " + new Date(current.closedAt).toLocaleDateString() : ""}. Nothing can be edited until you reopen it, or start the next cycle below.`}
+                </p>
+              </div>
+              {!confirmingCloseReopen ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingCloseReopen(true)}
+                    className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap"
+                    style={{ background: current.status === "open" ? "var(--clay)" : "var(--pine)" }}
+                  >
+                    {current.status === "open" ? "Close this cycle" : "Reopen this cycle"}
+                  </button>
+                  {current.status === "closed" && (
+                    <button
+                      type="button"
+                      onClick={() => setShowStartForm((v) => !v)}
+                      className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap"
+                      style={{ background: "var(--horizon)" }}
+                    >
+                      Start new cycle
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={closingOrReopening}
+                    onClick={closeOrReopenCycle}
+                    className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 whitespace-nowrap"
+                    style={{ background: current.status === "open" ? "var(--clay)" : "var(--pine)" }}
+                  >
+                    {closingOrReopening ? "Working…" : current.status === "open" ? "Yes, close it" : "Yes, reopen it"}
+                  </button>
+                  <button type="button" onClick={() => setConfirmingCloseReopen(false)} className="rounded-lg px-4 py-2.5 text-sm font-semibold border border-black/20 bg-white">
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">No cycle started yet</h3>
+                <p className="text-[13px] text-[var(--ink-soft)]">Start your first review cycle to let people begin their reviews.</p>
+              </div>
+              <button type="button" onClick={() => setShowStartForm(true)} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap" style={{ background: "var(--horizon)" }}>
+                Start a cycle
+              </button>
+            </div>
+          )}
+
+          {showStartForm && (
+            <div className="mt-4 pt-4 border-t border-black/10 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="block">
+                <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Cycle name</span>
+                <input value={newCycleName} onChange={(e) => setNewCycleName(e.target.value)} placeholder="e.g. H1 2027" className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm" />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Start date</span>
+                <input type="date" value={newCycleStart} onChange={(e) => setNewCycleStart(e.target.value)} className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm" />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">End date</span>
+                <input type="date" value={newCycleEnd} onChange={(e) => setNewCycleEnd(e.target.value)} className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm" />
+              </label>
+              {startCycleError && <div className="sm:col-span-3 text-[var(--clay)] text-[13px] font-semibold">{startCycleError}</div>}
+              <div className="sm:col-span-3 flex gap-2">
+                <button
+                  type="button"
+                  disabled={startingCycle || !newCycleName.trim() || !newCycleStart || !newCycleEnd}
+                  onClick={startNewCycle}
+                  className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: "var(--horizon)" }}
+                >
+                  {startingCycle ? "Starting…" : "Create & start this cycle"}
+                </button>
+                <button type="button" onClick={() => setShowStartForm(false)} className="rounded-lg px-4 py-2.5 text-sm font-semibold border border-black/20 bg-white">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {pastCycles.length > 0 && (
+        <section className="border rounded-xl p-4 mb-6 bg-white border-black/10">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[13px] font-semibold text-[var(--ink-soft)]">Viewing:</span>
+            <select
+              value={viewingCycleId || ""}
+              onChange={(e) => setViewingCycleId(e.target.value)}
+              className="border border-black/18 rounded-lg px-3 py-1.5 text-[13px] bg-white"
+            >
+              {current && <option value={current.id}>{current.name} (current)</option>}
+              {pastCycles.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {!isViewingCurrent && (
+              <span className="text-[12.5px] italic text-[var(--ink-soft)]">Read-only snapshot of a closed cycle.</span>
+            )}
+          </div>
+        </section>
+      )}
 
       {!rows && <div className="text-center text-[var(--ink-soft)] text-sm py-16">Loading cycle data…</div>}
 

@@ -4,6 +4,7 @@ import { reviews } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canWriteReview } from "@/lib/permissions";
+import { getCurrentCycle, isCycleLocked } from "@/lib/cycles";
 import { z } from "zod";
 
 const bodySchema = z.object({ discussed: z.boolean() });
@@ -18,13 +19,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ emp
     return NextResponse.json({ error: "Only this person's manager can do that." }, { status: 403 });
   }
 
+  if (await isCycleLocked()) {
+    return NextResponse.json({ error: "This review cycle has been locked by HR." }, { status: 423 });
+  }
+
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input." }, { status: 400 });
+
+  const currentCycle = await getCurrentCycle();
+  if (!currentCycle) return NextResponse.json({ error: "No active review cycle." }, { status: 404 });
 
   const rows = await db
     .select()
     .from(reviews)
-    .where(and(eq(reviews.employeeId, employeeId), eq(reviews.reviewerType, "manager")))
+    .where(and(eq(reviews.employeeId, employeeId), eq(reviews.reviewerType, "manager"), eq(reviews.cycleId, currentCycle.id)))
     .limit(1);
   const existing = rows[0];
   if (!existing) return NextResponse.json({ error: "No manager review exists yet." }, { status: 404 });

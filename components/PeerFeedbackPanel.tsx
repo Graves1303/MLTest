@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 
 type Peer = { id: string; name: string };
-type ChecklistItem = { id: string; name: string; submitted: boolean };
+type ChecklistItem = { id: string; name: string; submitted: boolean; locked: boolean };
 
 export default function PeerFeedbackPanel({ employeeId, employeeName }: { employeeId: string; employeeName: string }) {
   const [peers, setPeers] = useState<Peer[]>([]);
@@ -35,6 +35,15 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
       // best-effort — peer feedback isn't essential to loading the review
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function unlockPeer(peerUserId: string) {
+    try {
+      await api.post(`/api/peer-feedback/${employeeId}/unlock`, { peerUserId });
+      await load();
+    } catch {
+      // best-effort — a failed unlock just leaves it locked, no state to roll back
     }
   }
 
@@ -161,6 +170,12 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
           {checklist.map((c) => (
             <span key={c.id} className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--ink-soft)]">
               <span style={{ color: c.submitted ? "var(--pine)" : "var(--ink-soft)" }}>{c.submitted ? "●" : "○"}</span> {c.name}
+              {c.submitted && c.locked && (
+                <button type="button" onClick={() => unlockPeer(c.id)} className="underline text-[var(--horizon)] font-semibold">
+                  Unlock
+                </button>
+              )}
+              {c.submitted && !c.locked && <span className="italic text-[var(--sand)]">unlocked</span>}
             </span>
           ))}
         </div>

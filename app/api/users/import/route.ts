@@ -15,6 +15,7 @@ const rowSchema = z.object({
   email: z.string().email(),
   title: z.string().optional().default(""),
   level: z.string().optional().default(""),
+  templateKey: z.string().optional().default("corporate"),
   managerRef: z.string().optional().default(""), // raw text from the CSV — resolved below
   isHrAdmin: z.boolean().optional().default(false),
 });
@@ -47,11 +48,11 @@ export async function POST(req: NextRequest) {
     const email = row.email.toLowerCase();
     const existing = byEmail.get(email);
 
-    if (row.level && !contextForLevel(row.level)) {
-      problems.push(`${row.name}: level "${row.level}" doesn't match a standard title — saved as typed, but with no level context.`);
+    if (row.level && !contextForLevel(row.templateKey, row.level)) {
+      problems.push(`${row.name}: level "${row.level}" doesn't match a standard title for the ${row.templateKey} template — saved as typed, but with no level context.`);
     }
-    const level = canonicalLevel(row.level);
-    const levelContext = contextForLevel(row.level);
+    const level = canonicalLevel(row.templateKey, row.level);
+    const levelContext = contextForLevel(row.templateKey, row.level);
 
     if (existing) {
       await db
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
           title: row.title ? row.title : existing.title,
           level: row.level ? level : existing.level,
           levelContext: row.level ? levelContext : existing.levelContext,
+          templateKey: row.templateKey || existing.templateKey,
           ...(row.isHrAdmin ? { isHrAdmin: true } : {}),
         })
         .where(eq(users.id, existing.id));
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
         title: row.title,
         level,
         levelContext,
+        templateKey: row.templateKey,
         isHrAdmin: row.isHrAdmin,
         passwordHash,
         mustChangePassword: true,

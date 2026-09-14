@@ -4,6 +4,8 @@ import { reviews, users } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canReadReview, canViewRosterEntry } from "@/lib/permissions";
+import { getCurrentCycle } from "@/lib/cycles";
+import { getTemplate } from "@/lib/domain";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ employeeId: string }> }) {
   const { employeeId } = await params;
@@ -21,6 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
       name: users.name,
       title: users.title,
       level: users.level,
+      templateKey: users.templateKey,
       managerId: users.managerId,
     })
     .from(users)
@@ -29,10 +32,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
   if (!employeeRows[0]) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   async function loadIfAllowed(type: "self" | "manager") {
+    const currentCycle = await getCurrentCycle();
+    if (!currentCycle) return null;
     const rows = await db
       .select()
       .from(reviews)
-      .where(and(eq(reviews.employeeId, employeeId), eq(reviews.reviewerType, type)))
+      .where(and(eq(reviews.employeeId, employeeId), eq(reviews.reviewerType, type), eq(reviews.cycleId, currentCycle.id)))
       .limit(1);
     const row = rows[0] || null;
     const allowed = await canReadReview(currentViewer, employeeId, type, (row?.status as "draft" | "submitted") ?? null, row?.discussed ?? false);
@@ -45,6 +50,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
   }
 
   const [selfReview, managerReview] = await Promise.all([loadIfAllowed("self"), loadIfAllowed("manager")]);
+  const template = getTemplate(employeeRows[0].templateKey);
 
-  return NextResponse.json({ employee: employeeRows[0], selfReview, managerReview });
+  return NextResponse.json({
+    employee: employeeRows[0],
+    selfReview,
+    managerReview,
+    categories: template.categories,
+  });
 }

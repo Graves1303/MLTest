@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { upwardDrafts, users } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { emptyRatingMap, VALUES_ITEMS, COMPETENCY_ITEMS, RATING_VALUES, slugId } from "@/lib/domain";
+import { getCurrentCycle } from "@/lib/cycles";
+import { emptyCategoryData, getTemplate, RATING_VALUES, slugId, type CategoryData } from "@/lib/domain";
 import { z } from "zod";
 
 export async function GET() {
@@ -11,10 +12,10 @@ export async function GET() {
   if (!viewer) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   if (!viewer.managerId) {
-    return NextResponse.json({ managerName: null, managerLevel: null, managerLevelContext: null, draft: null });
+    return NextResponse.json({ managerName: null, managerLevel: null, managerLevelContext: null, categories: [], draft: null });
   }
   const mgrRows = await db
-    .select({ name: users.name, level: users.level, levelContext: users.levelContext })
+    .select({ name: users.name, level: users.level, levelContext: users.levelContext, templateKey: users.templateKey })
     .from(users)
     .where(eq(users.id, viewer.managerId))
     .limit(1);
@@ -22,28 +23,30 @@ export async function GET() {
   const managerLevel = mgrRows[0]?.level || null;
   const managerLevelContext = mgrRows[0]?.levelContext || null;
 
-  const rows = await db.select().from(upwardDrafts).where(eq(upwardDrafts.reporterId, viewer.id)).limit(1);
-  const draft = rows[0] || null;
+  const template = getTemplate(mgrRows[0]?.templateKey);
+  const upwardCategories = template.categories.filter((c) => template.upwardCategoryKeys.includes(c.key));
+
+  const currentCycle = await getCurrentCycle();
+  const draft = currentCycle
+    ? (await db.select().from(upwardDrafts).where(and(eq(upwardDrafts.reporterId, viewer.id), eq(upwardDrafts.cycleId, currentCycle.id))).limit(1))[0] || null
+    : null;
 
   return NextResponse.json({
     managerName,
     managerLevel,
     managerLevelContext,
+    categories: upwardCategories,
     draft: draft
       ? {
-          values: draft.values,
-          valuesComments: draft.valuesComments,
-          competencies: draft.competencies,
-          competenciesComments: draft.competenciesComments,
+          categoryData: draft.categoryData,
           status: draft.status,
+          locked: draft.locked,
           submittedAt: draft.submittedAt,
         }
       : {
-          values: emptyRatingMap(VALUES_ITEMS),
-          valuesComments: "",
-          competencies: emptyRatingMap(COMPETENCY_ITEMS),
-          competenciesComments: "",
+          categoryData: emptyCategoryData(upwardCategories),
           status: "none",
+          locked: false,
           submittedAt: null,
         },
   });
@@ -53,22 +56,30 @@ const ratingMapSchema = z.record(
   z.string(),
   z.union([z.number().refine((v) => (RATING_VALUES as readonly number[]).includes(v)), z.null()])
 );
-const putSchema = z.object({
-  values: ratingMapSchema,
-  valuesComments: z.string().default(""),
-  competencies: ratingMapSchema,
-  competenciesComments: z.string().default(""),
-});
+const categoryDataSchema = z.record(z.string(), z.object({ ratings: ratingMapSchema, comments: z.string().default("") }));
+const putSchema = z.object({ categoryData: categoryDataSchema });
 
 export async function PUT(req: NextRequest) {
   const viewer = await getCurrentUser();
   if (!viewer) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!viewer.managerId) return NextResponse.json({ error: "You don't have a manager on file." }, { status: 400 });
 
+  const currentCycle = await getCurrentCycle();
+  if (!currentCycle || currentCycle.status === "closed") {
+    return NextResponse.json({ error: "There's no open review cycle right now." }, { status: 423 });
+  }
+
   const parsed = putSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input." }, { status: 400 });
 
-  const existing = await db.select().from(upwardDrafts).where(eq(upwardDrafts.reporterId, viewer.id)).limit(1);
+  const mgrRows = await db.select({ templateKey: users.templateKey }).from(users).where(eq(users.id, viewer.managerId)).limit(1);
+  const templateKey = mgrRows[0]?.templateKey || "corporate";
+
+  const existing = await db
+    .select()
+    .from(upwardDrafts)
+    .where(and(eq(upwardDrafts.reporterId, viewer.id), eq(upwardDrafts.cycleId, currentCycle.id)))
+    .limit(1);
   if (existing[0]?.status === "submitted") {
     return NextResponse.json({ error: "Already submitted — reopen it first to make changes." }, { status: 409 });
   }
@@ -76,14 +87,16 @@ export async function PUT(req: NextRequest) {
   if (existing[0]) {
     await db
       .update(upwardDrafts)
-      .set({ ...parsed.data, managerId: viewer.managerId, updatedAt: new Date() })
+      .set({ categoryData: parsed.data.categoryData, templateKey, managerId: viewer.managerId, updatedAt: new Date() })
       .where(eq(upwardDrafts.id, existing[0].id));
   } else {
     await db.insert(upwardDrafts).values({
       id: slugId("upwarddraft"),
       reporterId: viewer.id,
+      cycleId: currentCycle.id,
       managerId: viewer.managerId,
-      ...parsed.data,
+      categoryData: parsed.data.categoryData,
+      templateKey,
     });
   }
 

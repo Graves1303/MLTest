@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Papa from "papaparse";
 import { api } from "@/lib/api-client";
-import { contextForLevel } from "@/lib/domain";
+import { contextForLevel, templateOptions } from "@/lib/domain";
 
 const COLUMN_ALIASES: Record<string, string[]> = {
   name: ["name", "employee", "employee name"],
@@ -38,6 +38,7 @@ export default function ImportRosterPanel({
   onImported: () => void;
 }) {
   const [rawText, setRawText] = useState("");
+  const [templateKey, setTemplateKey] = useState("corporate");
   const [parsed, setParsed] = useState<{ rows: ParsedRow[]; problems: string[] } | null>(null);
   const [parseError, setParseError] = useState("");
   const [importing, setImporting] = useState(false);
@@ -108,7 +109,7 @@ export default function ImportRosterPanel({
       }
       seenEmails.add(email);
       const level = colMap.level ? (row[colMap.level] || "").trim() : "";
-      if (level && !contextForLevel(level)) {
+      if (level && !contextForLevel(templateKey, level)) {
         problems.push(`Row ${i + 2}: level "${level}" doesn't match a standard title — will be saved as typed, with no level context.`);
       }
       rows.push({
@@ -135,6 +136,7 @@ export default function ImportRosterPanel({
           email: r.email,
           title: r.title,
           level: r.level,
+          templateKey,
           managerRef: r.managerRef,
           isHrAdmin: r.isHrAdmin,
         })),
@@ -192,6 +194,17 @@ export default function ImportRosterPanel({
             for it. Matching is by email — importing someone already on the roster updates their profile instead of
             duplicating them; blank cells never overwrite existing values, and their password is never touched.
           </p>
+          <label className="block mb-3 max-w-xs">
+            <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Review template for this batch</span>
+            <select value={templateKey} onChange={(e) => setTemplateKey(e.target.value)} className="w-full border border-black/18 rounded-lg px-3 py-2 text-sm bg-white">
+              {templateOptions().map((t) => (
+                <option key={t.key} value={t.key}>{t.label}</option>
+              ))}
+            </select>
+            <span className="block text-[12px] text-[var(--ink-soft)] mt-1">
+              Applies to everyone in this file — import Corporate and Retail rosters as separate files if you have both.
+            </span>
+          </label>
           <div className="flex items-center gap-3 mb-2.5">
             <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg px-3 py-2 text-xs font-semibold border border-black/20 bg-white">
               Choose CSV file
