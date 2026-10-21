@@ -86,6 +86,26 @@ added, run `npm run encrypt-existing-data` once after setting
 only rewrites rows that aren't already encrypted. **Back up the database
 before running it against a production environment with real data.**
 
+## Sign in with Google
+
+Optional, off by default. Everyone still needs to be on the roster first —
+Google sign-in is just a second way to authenticate into an *existing*
+account (matched by email), not a way to self-provision one; an email that
+isn't on the roster gets turned away with a message to ask HR, same as
+today.
+
+To turn it on:
+1. In Google Cloud Console, create an OAuth 2.0 Client ID (APIs & Services →
+   Credentials → "Web application").
+2. Add an authorized redirect URI for each environment: `http://localhost:3000/api/auth/google/callback` for local dev, and your production URL + the same path.
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` (and in your
+   host's environment variables for production).
+
+The login page's "Sign in with Google" button restricts the Google account
+picker to the `marinelayer.com` Workspace domain (`hd=marinelayer.com`) as a
+first pass, but the real gate is still the roster-email match in
+`app/api/auth/google/callback/route.ts`.
+
 ## Stack
 
 - **Next.js** (App Router) — pages + API routes in one deployable app
