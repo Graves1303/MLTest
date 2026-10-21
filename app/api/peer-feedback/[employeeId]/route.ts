@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canWriteReview } from "@/lib/permissions";
 import { getCurrentCycle } from "@/lib/cycles";
+import { decryptText } from "@/lib/crypto";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ employeeId: string }> }) {
   const { employeeId } = await params;
@@ -52,6 +53,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     minToReveal,
     count: entries.length,
     revealed,
-    entries: revealed ? entries.map((e) => ({ id: e.id, strengths: e.strengths, growth: e.growth })) : [],
+    entries: revealed ? entries.map((e) => ({ id: e.id, strengths: decryptText(e.strengths), growth: decryptText(e.growth) })) : [],
   });
 }

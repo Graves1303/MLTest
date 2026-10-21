@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCurrentCycle } from "@/lib/cycles";
 import { getTemplate, slugId, type CategoryData } from "@/lib/domain";
 import { z } from "zod";
+import { decryptJson } from "@/lib/crypto";
 
 const bodySchema = z.object({ reopen: z.boolean().default(false) });
 
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
   }
 
   const template = getTemplate(draft.templateKey);
-  const categoryData = (draft.categoryData as CategoryData) || {};
+  const categoryData = decryptJson<CategoryData>(draft.categoryData, {} as CategoryData);
   const missingComments = template.upwardCategoryKeys.some((key) => !categoryData[key]?.comments?.trim());
   if (missingComments) {
     return NextResponse.json(

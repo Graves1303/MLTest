@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { reviews, users, upwardEntries } from "@/lib/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { computeCategorySummary, computeCategoryAggregate, getTemplate, UPWARD_MIN_REVEAL, type CategoryData } from "@/lib/domain";
+import { decryptJson } from "@/lib/crypto";
 
 export async function buildCycleReport(cycleId: string) {
   const people = await db
@@ -34,7 +35,8 @@ export async function buildCycleReport(cycleId: string) {
   function scoresFor(row?: typeof reviewRows[number]) {
     if (!row) return { status: "none", overallScore: null, overallGrade: null, submittedAt: null, promotionEligible: "" };
     const template = getTemplate(row.templateKey);
-    const summary = computeCategorySummary(row.categoryData as CategoryData, template.categories.map((c) => c.key));
+    const categoryData = decryptJson<CategoryData>(row.categoryData, {} as CategoryData);
+    const summary = computeCategorySummary(categoryData, template.categories.map((c) => c.key));
     return {
       status: row.status,
       categoryOveralls: summary.categoryOveralls,
@@ -56,9 +58,10 @@ export async function buildCycleReport(cycleId: string) {
           ? "not_started"
           : "in_progress";
       const upwardPool = upwardByManager[p.id] || [];
+      const upwardPoolDecrypted = upwardPool.map((u) => ({ ...u, categoryData: decryptJson<CategoryData>(u.categoryData, {} as CategoryData) }));
       const managerTemplate = getTemplate(p.templateKey);
       const upwardAgg = computeCategoryAggregate(
-        upwardPool.map((u) => u.categoryData as CategoryData),
+        upwardPoolDecrypted.map((u) => u.categoryData),
         managerTemplate.upwardCategoryKeys,
         UPWARD_MIN_REVEAL
       );
@@ -74,7 +77,7 @@ export async function buildCycleReport(cycleId: string) {
         manager,
         cycleStatus,
         upwardAgg,
-        upwardEntries: upwardAgg.revealed ? upwardPool.map((u) => ({ id: u.id, categoryData: u.categoryData })) : [],
+        upwardEntries: upwardAgg.revealed ? upwardPoolDecrypted.map((u) => ({ id: u.id, categoryData: u.categoryData })) : [],
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

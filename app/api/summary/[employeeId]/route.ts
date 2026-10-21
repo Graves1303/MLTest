@@ -5,7 +5,8 @@ import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canReadReview, canViewRosterEntry } from "@/lib/permissions";
 import { getCurrentCycle } from "@/lib/cycles";
-import { getTemplate } from "@/lib/domain";
+import { getTemplate, type CategoryData, type Goal } from "@/lib/domain";
+import { decryptText, decryptJson } from "@/lib/crypto";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ employeeId: string }> }) {
   const { employeeId } = await params;
@@ -42,11 +43,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     const row = rows[0] || null;
     const allowed = await canReadReview(currentViewer, employeeId, type, (row?.status as "draft" | "submitted") ?? null, row?.discussed ?? false);
     if (!allowed || !row) return allowed ? row : null;
+    const decrypted = {
+      ...row,
+      summary: decryptText(row.summary),
+      categoryData: decryptJson<CategoryData>(row.categoryData, {} as CategoryData),
+      goals: decryptJson<Goal[]>(row.goals, []),
+    };
     if (currentViewer.id === employeeId) {
-      const { promotionEligible, ...rest } = row;
-      return rest as typeof row;
+      const { promotionEligible, ...rest } = decrypted;
+      return rest as typeof decrypted;
     }
-    return row;
+    return decrypted;
   }
 
   const [selfReview, managerReview] = await Promise.all([loadIfAllowed("self"), loadIfAllowed("manager")]);

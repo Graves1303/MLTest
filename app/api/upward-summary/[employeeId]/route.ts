@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canWriteReview } from "@/lib/permissions";
 import { getCurrentCycle } from "@/lib/cycles";
 import { computeCategoryAggregate, getTemplate, UPWARD_MIN_REVEAL, type CategoryData } from "@/lib/domain";
+import { decryptJson } from "@/lib/crypto";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ employeeId: string }> }) {
   const { employeeId } = await params;
@@ -26,8 +27,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
   ]);
 
   const template = getTemplate(empRows[0]?.templateKey);
+  const poolDecrypted = pool.map((u) => ({ ...u, categoryData: decryptJson<CategoryData>(u.categoryData, {} as CategoryData) }));
   const agg = computeCategoryAggregate(
-    pool.map((u) => u.categoryData as CategoryData),
+    poolDecrypted.map((u) => u.categoryData),
     template.upwardCategoryKeys,
     UPWARD_MIN_REVEAL
   );
@@ -38,6 +40,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     overallScore: agg.overallScore,
     overallGrade: agg.overallGrade,
     categories: template.categories.filter((c) => template.upwardCategoryKeys.includes(c.key)),
-    entries: pool.map((u) => ({ id: u.id, categoryData: u.categoryData })),
+    entries: poolDecrypted.map((u) => ({ id: u.id, categoryData: u.categoryData })),
   });
 }

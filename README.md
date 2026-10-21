@@ -67,6 +67,25 @@ resubmitting updates your existing anonymous entry rather than creating a
 second one. HR admins see an aggregated view (average score + anonymized
 comments) once enough responses come in — never who submitted what.
 
+## Encryption at rest
+
+Review content — `summary`, `goals`, and category ratings/comments on
+reviews, anonymous peer feedback (`strengths`/`growth`), and anonymous
+upward review entries — is encrypted (AES-256-GCM) before it's written to
+Postgres, and decrypted only when a server route that's already passed the
+access-control checks in `lib/permissions.ts` reads it back. This is on top
+of, not instead of, those access controls — someone without `ENCRYPTION_KEY`
+who gets raw database access (a leaked credential, a misconfigured backup)
+sees ciphertext, not review content.
+
+The key lives in `ENCRYPTION_KEY` (never commit it, never share it outside
+your secrets manager / host's environment variables). If you're deploying an
+existing database that already has plaintext rows from before this was
+added, run `npm run encrypt-existing-data` once after setting
+`ENCRYPTION_KEY` in that environment — it's idempotent (safe to re-run) and
+only rewrites rows that aren't already encrypted. **Back up the database
+before running it against a production environment with real data.**
+
 ## Stack
 
 - **Next.js** (App Router) — pages + API routes in one deployable app
@@ -91,6 +110,9 @@ comments) once enough responses come in — never who submitted what.
 3. Copy `.env.example` to `.env` and fill in:
    - `DATABASE_URL` — your connection string
    - `SESSION_SECRET` — a long random string, e.g. `openssl rand -base64 32`
+   - `ENCRYPTION_KEY` — a 32-byte base64 string, e.g. `openssl rand -base64 32`
+     (encrypts review content, peer feedback, and upward reviews at rest —
+     see "Encryption at rest" below)
    - `SEED_ADMIN_EMAIL` / `SEED_ADMIN_NAME` / `SEED_ADMIN_PASSWORD` — the first
      HR admin account
 4. Push the schema to your database:
