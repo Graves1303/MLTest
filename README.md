@@ -106,6 +106,23 @@ picker to the `marinelayer.com` Workspace domain (`hd=marinelayer.com`) as a
 first pass, but the real gate is still the roster-email match in
 `app/api/auth/google/callback/route.ts`.
 
+## HR document library (Dropbox)
+
+Optional, off by default. HR admins can upload company documents (policies,
+templates) from the "Documents" tab under Admin — the files are stored in a
+Dropbox folder, not the database; only metadata (name, size, uploader)
+lives in Postgres. Visible only to HR admins, not attached to any
+individual's review.
+
+To turn it on:
+1. Create an app at [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) — choose **Scoped access**, and **App folder** access (the app only ever sees its own folder in Dropbox, not your whole account).
+2. In that app's settings, add a redirect URI for each environment: `http://localhost:3000/api/admin/dropbox/callback` for local dev, and your production URL + the same path.
+3. Copy the App key / App secret into `.env` as `DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET` (and into your host's environment variables for production).
+4. As a signed-in HR admin, go to Admin → Documents and click "Connect Dropbox" — you'll log into Dropbox yourself and approve the connection.
+
+The Dropbox refresh token is stored encrypted (via the same `ENCRYPTION_KEY`
+used for review content), in the `dropbox_connections` table.
+
 ## Stack
 
 - **Next.js** (App Router) — pages + API routes in one deployable app

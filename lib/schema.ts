@@ -225,5 +225,35 @@ export const cycleSettings = pgTable("cycle_settings", {
   lockedAt: timestamp("locked_at"),
 });
 
+/**
+ * A single, company-wide Dropbox connection backing the HR document
+ * library below — not a per-user connection. id is always "default" (one
+ * row, upserted on (re)connect). refreshTokenEnc is encrypted at rest via
+ * lib/crypto.ts, same as sensitive review content.
+ */
+export const dropboxConnections = pgTable("dropbox_connections", {
+  id: text("id").primaryKey().default("default"),
+  accountEmail: text("account_email").notNull(),
+  refreshTokenEnc: text("refresh_token_enc").notNull(),
+  connectedById: text("connected_by_id").notNull(),
+  connectedAt: timestamp("connected_at").notNull().defaultNow(),
+});
+
+/**
+ * Metadata for files HR admins have uploaded to the Dropbox-backed document
+ * library. The file bytes live in Dropbox (at dropboxPath); only metadata
+ * lives here. Visible only to HR admins — not attached to any employee or
+ * review.
+ */
+export const documents = pgTable("documents", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  dropboxPath: text("dropbox_path").notNull(),
+  size: text("size").notNull(),
+  mimeType: text("mime_type").notNull().default("application/octet-stream"),
+  uploadedById: text("uploaded_by_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 
 

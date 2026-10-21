@@ -8,6 +8,7 @@ export default function AdminSubNav() {
   const tabs = [
     { href: "/admin", label: "Roster" },
     { href: "/admin/cycle", label: "Cycle overview" },
+    { href: "/admin/documents", label: "Documents" },
   ];
   return (
     <div className="flex gap-1.5 mb-6 border-b border-black/10 pb-0">
