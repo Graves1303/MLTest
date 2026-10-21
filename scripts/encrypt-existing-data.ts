@@ -9,6 +9,11 @@ try {
 }
 
 async function main() {
+  if (!process.env.ENCRYPTION_KEY) {
+    console.error("ENCRYPTION_KEY isn't set — set it first (same value the app will run with), then re-run this script.");
+    process.exit(1);
+  }
+
   const { db } = await import("../lib/db");
   const { reviews, peerFeedbackEntries, upwardDrafts, upwardEntries } = await import("../lib/schema");
   const { eq } = await import("drizzle-orm");
