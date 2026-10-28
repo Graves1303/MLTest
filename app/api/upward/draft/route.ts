@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCurrentCycle } from "@/lib/cycles";
 import { emptyCategoryData, getTemplate, RATING_VALUES, slugId, type CategoryData } from "@/lib/domain";
 import { z } from "zod";
+import { encryptJson, decryptJson } from "@/lib/crypto";
 
 export async function GET() {
   const viewer = await getCurrentUser();
@@ -38,7 +39,7 @@ export async function GET() {
     categories: upwardCategories,
     draft: draft
       ? {
-          categoryData: draft.categoryData,
+          categoryData: decryptJson<CategoryData>(draft.categoryData, {} as CategoryData),
           status: draft.status,
           locked: draft.locked,
           submittedAt: draft.submittedAt,
@@ -87,7 +88,7 @@ export async function PUT(req: NextRequest) {
   if (existing[0]) {
     await db
       .update(upwardDrafts)
-      .set({ categoryData: parsed.data.categoryData, templateKey, managerId: viewer.managerId, updatedAt: new Date() })
+      .set({ categoryData: encryptJson(parsed.data.categoryData), templateKey, managerId: viewer.managerId, updatedAt: new Date() })
       .where(eq(upwardDrafts.id, existing[0].id));
   } else {
     await db.insert(upwardDrafts).values({
@@ -95,7 +96,7 @@ export async function PUT(req: NextRequest) {
       reporterId: viewer.id,
       cycleId: currentCycle.id,
       managerId: viewer.managerId,
-      categoryData: parsed.data.categoryData,
+      categoryData: encryptJson(parsed.data.categoryData),
       templateKey,
     });
   }

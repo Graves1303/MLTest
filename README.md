@@ -67,6 +67,66 @@ resubmitting updates your existing anonymous entry rather than creating a
 second one. HR admins see an aggregated view (average score + anonymized
 comments) once enough responses come in — never who submitted what.
 
+## Encryption at rest
+
+Optional, and off by default — deploying this with no env changes leaves
+the app working exactly as it did before. Review content — `summary`,
+`goals`, and category ratings/comments on reviews, anonymous peer feedback
+(`strengths`/`growth`), and anonymous upward review entries — gets
+encrypted (AES-256-GCM) before it's written to Postgres, and decrypted only
+when a server route that's already passed the access-control checks in
+`lib/permissions.ts` reads it back. This is on top of, not instead of,
+those access controls — someone without `ENCRYPTION_KEY` who gets raw
+database access (a leaked credential, a misconfigured backup) sees
+ciphertext, not review content.
+
+To turn it on, set `ENCRYPTION_KEY` (never commit it, never share it
+outside your secrets manager / host's environment variables). Until it's
+set, review content is stored in plaintext (same as before this existed)
+and the server logs a one-time warning — nothing breaks either way. If
+you're turning this on for a database that already has plaintext rows, run
+`npm run encrypt-existing-data` once after setting `ENCRYPTION_KEY` in that
+environment — it's idempotent (safe to re-run) and only rewrites rows that
+aren't already encrypted. **Back up the database before running it against
+a production environment with real data.**
+
+## Sign in with Google
+
+Optional, off by default. Everyone still needs to be on the roster first —
+Google sign-in is just a second way to authenticate into an *existing*
+account (matched by email), not a way to self-provision one; an email that
+isn't on the roster gets turned away with a message to ask HR, same as
+today.
+
+To turn it on:
+1. In Google Cloud Console, create an OAuth 2.0 Client ID (APIs & Services →
+   Credentials → "Web application").
+2. Add an authorized redirect URI for each environment: `http://localhost:3000/api/auth/google/callback` for local dev, and your production URL + the same path.
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` (and in your
+   host's environment variables for production).
+
+The login page's "Sign in with Google" button restricts the Google account
+picker to the `marinelayer.com` Workspace domain (`hd=marinelayer.com`) as a
+first pass, but the real gate is still the roster-email match in
+`app/api/auth/google/callback/route.ts`.
+
+## HR document library (Dropbox)
+
+Optional, off by default. HR admins can upload company documents (policies,
+templates) from the "Documents" tab under Admin — the files are stored in a
+Dropbox folder, not the database; only metadata (name, size, uploader)
+lives in Postgres. Visible only to HR admins, not attached to any
+individual's review.
+
+To turn it on:
+1. Create an app at [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) — choose **Scoped access**, and **App folder** access (the app only ever sees its own folder in Dropbox, not your whole account).
+2. In that app's settings, add a redirect URI for each environment: `http://localhost:3000/api/admin/dropbox/callback` for local dev, and your production URL + the same path.
+3. Copy the App key / App secret into `.env` as `DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET` (and into your host's environment variables for production).
+4. As a signed-in HR admin, go to Admin → Documents and click "Connect Dropbox" — you'll log into Dropbox yourself and approve the connection.
+
+The Dropbox refresh token is stored encrypted (via the same `ENCRYPTION_KEY`
+used for review content), in the `dropbox_connections` table.
+
 ## Stack
 
 - **Next.js** (App Router) — pages + API routes in one deployable app
@@ -93,6 +153,10 @@ comments) once enough responses come in — never who submitted what.
    - `SESSION_SECRET` — a long random string, e.g. `openssl rand -base64 32`
    - `SEED_ADMIN_EMAIL` / `SEED_ADMIN_NAME` / `SEED_ADMIN_PASSWORD` — the first
      HR admin account
+   - `ENCRYPTION_KEY` — optional, a 32-byte base64 string, e.g.
+     `openssl rand -base64 32` (encrypts review content, peer feedback, and
+     upward reviews at rest — see "Encryption at rest" below; leave unset
+     and the app runs exactly as it did before this existed)
 4. Push the schema to your database:
    ```
    npm run db:push

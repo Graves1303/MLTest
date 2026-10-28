@@ -6,7 +6,17 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCurrentCycle, isCycleLocked } from "@/lib/cycles";
 import { canReadReview, canWriteReview } from "@/lib/permissions";
 import { z } from "zod";
-import { slugId, RATING_VALUES, getTemplate } from "@/lib/domain";
+import { slugId, RATING_VALUES, getTemplate, type CategoryData, type Goal } from "@/lib/domain";
+import { encryptText, decryptText, encryptJson, decryptJson } from "@/lib/crypto";
+
+function decryptReview<T extends { summary: string; categoryData: unknown; goals: unknown }>(row: T) {
+  return {
+    ...row,
+    summary: decryptText(row.summary),
+    categoryData: decryptJson<CategoryData>(row.categoryData, {} as CategoryData),
+    goals: decryptJson<Goal[]>(row.goals, []),
+  };
+}
 
 function parseType(type: string): "self" | "manager" | null {
   return type === "self" || type === "manager" ? type : null;
@@ -18,7 +28,7 @@ async function findReview(employeeId: string, type: "self" | "manager", cycleId:
     .from(reviews)
     .where(and(eq(reviews.employeeId, employeeId), eq(reviews.reviewerType, type), eq(reviews.cycleId, cycleId)))
     .limit(1);
-  return rows[0] || null;
+  return rows[0] ? decryptReview(rows[0]) : null;
 }
 
 // The most recent PRIOR cycle's review for this person — used only to show
@@ -31,7 +41,7 @@ async function previousCycleGoals(employeeId: string, type: "self" | "manager", 
     .where(and(eq(reviews.employeeId, employeeId), eq(reviews.reviewerType, type)))
     .orderBy(desc(reviews.updatedAt));
   const prior = rows.find((r) => r.cycleId && r.cycleId !== currentCycleId);
-  return prior?.goals || [];
+  return prior ? decryptJson<Goal[]>(prior.goals, []) : [];
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ employeeId: string; type: string }> }) {
@@ -157,10 +167,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
     await db
       .update(reviews)
       .set({
-        categoryData: data.categoryData,
+        categoryData: encryptJson(data.categoryData),
         templateKey,
-        summary: data.summary,
-        goals: data.goals,
+        summary: encryptText(data.summary),
+        goals: encryptJson(data.goals),
         promotionEligible: data.promotionEligible,
         status,
         locked: data.submit,
@@ -175,10 +185,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
       reviewerType: type,
       reviewerId: viewer.id,
       cycleId: currentCycle.id,
-      categoryData: data.categoryData,
+      categoryData: encryptJson(data.categoryData),
       templateKey,
-      summary: data.summary,
-      goals: data.goals,
+      summary: encryptText(data.summary),
+      goals: encryptJson(data.goals),
       promotionEligible: data.promotionEligible,
       status,
       locked: data.submit,

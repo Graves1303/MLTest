@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getCurrentCycle } from "@/lib/cycles";
 import { z } from "zod";
 import { slugId } from "@/lib/domain";
+import { encryptText, decryptText } from "@/lib/crypto";
 
 const bodySchema = z.object({
   strengths: z.string().default(""),
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ emp
     // Automatically re-locks — an admin unlock is good for exactly one more edit.
     await db
       .update(peerFeedbackEntries)
-      .set({ strengths: parsed.data.strengths.trim(), growth: parsed.data.growth.trim() })
+      .set({ strengths: encryptText(parsed.data.strengths.trim()), growth: encryptText(parsed.data.growth.trim()) })
       .where(eq(peerFeedbackEntries.id, existingMarker[0].entryId));
     await db.update(peerSubmissionMarkers).set({ locked: true }).where(eq(peerSubmissionMarkers.id, existingMarker[0].id));
     return NextResponse.json({ ok: true, updated: true });
@@ -76,8 +77,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ emp
     id: entryId,
     employeeId,
     cycleId: currentCycle.id,
-    strengths: parsed.data.strengths.trim(),
-    growth: parsed.data.growth.trim(),
+    strengths: encryptText(parsed.data.strengths.trim()),
+    growth: encryptText(parsed.data.growth.trim()),
   });
   await db.insert(peerSubmissionMarkers).values({
     id: slugId("peermark"),
@@ -127,7 +128,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     eligible: true,
     submitted: true,
     locked: marker[0].locked,
-    strengths: entry[0]?.strengths || "",
-    growth: entry[0]?.growth || "",
+    strengths: entry[0]?.strengths ? decryptText(entry[0].strengths) : "",
+    growth: entry[0]?.growth ? decryptText(entry[0].growth) : "",
   });
 }
