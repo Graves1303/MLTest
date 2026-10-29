@@ -4,12 +4,13 @@ import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { createSessionCookie } from "@/lib/auth";
 import { GOOGLE_OAUTH_STATE_COOKIE, googleRedirectUri, googleSsoConfigured } from "@/lib/google-sso";
+import { publicOrigin } from "@/lib/request-origin";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
 function fail(req: NextRequest, reason: string) {
-  const res = NextResponse.redirect(new URL(`/login?error=${reason}`, req.url));
+  const res = NextResponse.redirect(new URL(`/login?error=${reason}`, publicOrigin(req)));
   res.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
   return res;
 }
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
       code,
       grant_type: "authorization_code",
-      redirect_uri: googleRedirectUri(req.nextUrl.origin),
+      redirect_uri: googleRedirectUri(publicOrigin(req)),
     }),
   });
   if (!tokenRes.ok) return fail(req, "google_failed");
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
 
   await createSessionCookie(user.id);
 
-  const res = NextResponse.redirect(new URL("/dashboard", req.url));
+  const res = NextResponse.redirect(new URL("/dashboard", publicOrigin(req)));
   res.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
   return res;
 }

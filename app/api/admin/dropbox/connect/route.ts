@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { dropboxConfigured } from "@/lib/dropbox-client";
 import { DROPBOX_OAUTH_STATE_COOKIE, dropboxRedirectUri } from "@/lib/dropbox-oauth";
+import { publicOrigin } from "@/lib/request-origin";
 
 const DROPBOX_AUTHORIZE_URL = "https://www.dropbox.com/oauth2/authorize";
 
@@ -20,14 +21,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Only HR admins can connect Dropbox." }, { status: 403 });
   }
   if (!dropboxConfigured()) {
-    return NextResponse.redirect(new URL("/admin/documents?error=dropbox_not_configured", req.url));
+    return NextResponse.redirect(new URL("/admin/documents?error=dropbox_not_configured", publicOrigin(req)));
   }
 
   const state = crypto.randomBytes(16).toString("hex");
 
   const url = new URL(DROPBOX_AUTHORIZE_URL);
   url.searchParams.set("client_id", process.env.DROPBOX_APP_KEY!);
-  url.searchParams.set("redirect_uri", dropboxRedirectUri(req.nextUrl.origin));
+  url.searchParams.set("redirect_uri", dropboxRedirectUri(publicOrigin(req)));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("token_access_type", "offline");
   url.searchParams.set("state", state);

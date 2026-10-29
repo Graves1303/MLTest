@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { GOOGLE_OAUTH_STATE_COOKIE, googleRedirectUri, googleSsoConfigured } from "@/lib/google-sso";
+import { publicOrigin } from "@/lib/request-origin";
 
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
@@ -9,14 +10,14 @@ const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 // a standard OAuth2 authorization-code flow with CSRF protection via `state`.
 export async function GET(req: NextRequest) {
   if (!googleSsoConfigured()) {
-    return NextResponse.redirect(new URL("/login?error=google_not_configured", req.url));
+    return NextResponse.redirect(new URL("/login?error=google_not_configured", publicOrigin(req)));
   }
 
   const state = crypto.randomBytes(16).toString("hex");
 
   const url = new URL(GOOGLE_AUTHORIZE_URL);
   url.searchParams.set("client_id", process.env.GOOGLE_CLIENT_ID!);
-  url.searchParams.set("redirect_uri", googleRedirectUri(req.nextUrl.origin));
+  url.searchParams.set("redirect_uri", googleRedirectUri(publicOrigin(req)));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", state);
