@@ -6,11 +6,12 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
 import { DROPBOX_OAUTH_STATE_COOKIE, dropboxRedirectUri } from "@/lib/dropbox-oauth";
+import { publicOrigin } from "@/lib/request-origin";
 
 const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 
 function fail(req: NextRequest, reason: string) {
-  const res = NextResponse.redirect(new URL(`/admin/documents?error=${reason}`, req.url));
+  const res = NextResponse.redirect(new URL(`/admin/documents?error=${reason}`, publicOrigin(req)));
   res.cookies.delete(DROPBOX_OAUTH_STATE_COOKIE);
   return res;
 }
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       grant_type: "authorization_code",
       client_id: process.env.DROPBOX_APP_KEY!,
       client_secret: process.env.DROPBOX_APP_SECRET!,
-      redirect_uri: dropboxRedirectUri(req.nextUrl.origin),
+      redirect_uri: dropboxRedirectUri(publicOrigin(req)),
     }),
   });
   if (!tokenRes.ok) return fail(req, "dropbox_failed");
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const res = NextResponse.redirect(new URL("/admin/documents?connected=1", req.url));
+  const res = NextResponse.redirect(new URL("/admin/documents?connected=1", publicOrigin(req)));
   res.cookies.delete(DROPBOX_OAUTH_STATE_COOKIE);
   return res;
 }
