@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Papa from "papaparse";
 import { api } from "@/lib/api-client";
-import { contextForLevel, templateOptions } from "@/lib/domain";
+import { isKnownLevel, templateOptions } from "@/lib/domain";
 
 const COLUMN_ALIASES: Record<string, string[]> = {
   name: ["name", "employee", "employee name"],
@@ -109,7 +109,7 @@ export default function ImportRosterPanel({
       }
       seenEmails.add(email);
       const level = colMap.level ? (row[colMap.level] || "").trim() : "";
-      if (level && !contextForLevel(templateKey, level)) {
+      if (level && !isKnownLevel(templateKey, level)) {
         problems.push(`Row ${i + 2}: level "${level}" doesn't match a standard title — will be saved as typed, with no level context.`);
       }
       rows.push({

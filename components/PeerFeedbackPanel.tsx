@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
+import { MAX_PEER_REVIEWS_PER_PERSON } from "@/lib/domain";
 
-type Peer = { id: string; name: string };
+type Peer = { id: string; name: string; peerLoad?: number };
 type ChecklistItem = { id: string; name: string; submitted: boolean; locked: boolean };
 
 export default function PeerFeedbackPanel({ employeeId, employeeName }: { employeeId: string; employeeName: string }) {
@@ -17,6 +18,7 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Peer[]>([]);
+  const [peerError, setPeerError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -59,7 +61,7 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
     }
     const t = setTimeout(async () => {
       try {
-        const results: Peer[] = await api.get(`/api/directory?q=${encodeURIComponent(query.trim())}`);
+        const results: Peer[] = await api.get(`/api/directory?q=${encodeURIComponent(query.trim())}&withPeerLoad=1`);
         setSuggestions(
           results.filter((r) => r.id !== employeeId && !peers.some((p) => p.id === r.id)).slice(0, 6)
         );
@@ -71,12 +73,23 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
   }, [query, peers, employeeId]);
 
   async function savePeers(nextPeers: Peer[], nextMin: number) {
+    const previousPeers = peers;
+    const previousMin = minToReveal;
+    setPeerError(null);
     setPeers(nextPeers);
     setMinToReveal(nextMin);
-    await api.put(`/api/peer-assignments/${employeeId}`, {
-      peerUserIds: nextPeers.map((p) => p.id),
-      minToReveal: nextMin,
-    });
+    try {
+      await api.put(`/api/peer-assignments/${employeeId}`, {
+        peerUserIds: nextPeers.map((p) => p.id),
+        minToReveal: nextMin,
+      });
+    } catch (err: any) {
+      // The server refused (e.g. that person is already at the peer review
+      // limit). Put the list back to what's actually saved and say why.
+      setPeers(previousPeers);
+      setMinToReveal(previousMin);
+      setPeerError(err.message || "Couldn't save that change.");
+    }
     load();
   }
 
@@ -116,6 +129,10 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
               </span>
             ))}
           </div>
+          {peerError && <div className="text-[var(--clay)] text-[13px] font-semibold mb-2.5">{peerError}</div>}
+          <p className="text-[12px] text-[var(--ink-soft)] mb-2">
+            Each person can be asked to complete up to {MAX_PEER_REVIEWS_PER_PERSON} peer reviews per cycle.
+          </p>
           <div className="relative mb-2.5">
             <input
               type="text"
@@ -126,16 +143,27 @@ export default function PeerFeedbackPanel({ employeeId, employeeName }: { employ
             />
             {suggestions.length > 0 && (
               <div className="flex flex-col gap-1 mt-1.5">
-                {suggestions.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => addPeer(s)}
-                    className="text-left bg-white border border-black/12 rounded-lg px-3 py-2 text-[13px] hover:border-[var(--denim)]"
-                  >
-                    {s.name}
-                  </button>
-                ))}
+                {suggestions.map((s) => {
+                  const atLimit = (s.peerLoad ?? 0) >= MAX_PEER_REVIEWS_PER_PERSON;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={atLimit}
+                      onClick={() => addPeer(s)}
+                      className="text-left bg-white border border-black/12 rounded-lg px-3 py-2 text-[13px] hover:border-[var(--denim)] disabled:opacity-55 disabled:hover:border-black/12 disabled:cursor-not-allowed flex items-center justify-between gap-3"
+                    >
+                      <span>{s.name}</span>
+                      {s.peerLoad !== undefined && (
+                        <span className={`text-[11.5px] ${atLimit ? "text-[var(--clay)] font-semibold" : "text-[var(--ink-soft)]"}`}>
+                          {atLimit
+                            ? `At the limit (${s.peerLoad} of ${MAX_PEER_REVIEWS_PER_PERSON})`
+                            : `${s.peerLoad} of ${MAX_PEER_REVIEWS_PER_PERSON} peer reviews`}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

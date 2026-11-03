@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
-import { slugId, canonicalLevel, contextForLevel } from "@/lib/domain";
+import { slugId, canonicalLevel, contextForLevel, isKnownLevel } from "@/lib/domain";
 import { z } from "zod";
 
 function randomPassword() {
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const email = row.email.toLowerCase();
     const existing = byEmail.get(email);
 
-    if (row.level && !contextForLevel(row.templateKey, row.level)) {
+    if (row.level && !isKnownLevel(row.templateKey, row.level)) {
       problems.push(`${row.name}: level "${row.level}" doesn't match a standard title for the ${row.templateKey} template — saved as typed, but with no level context.`);
     }
     const level = canonicalLevel(row.templateKey, row.level);

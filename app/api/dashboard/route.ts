@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { reviews, users } from "@/lib/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { visibleEmployeeIds } from "@/lib/permissions";
+import { visibleEmployeeIds, reportingRelationships } from "@/lib/permissions";
 import { getCurrentCycle } from "@/lib/cycles";
 
 export async function GET() {
@@ -39,9 +39,15 @@ export async function GET() {
     if (r.reviewerType === "manager") statusByEmployee[r.employeeId].manager = r.status;
   }
 
+  // How each person relates to the viewer: themself, a direct report, or
+  // someone further down their reporting line. (For HR admins looking at
+  // everyone, anyone outside their own team is "other".)
+  const relationships = await reportingRelationships(viewer.id);
+
   const result = people
     .map((p) => ({
       ...p,
+      relationship: p.id === viewer.id ? "self" : relationships[p.id] || "other",
       selfStatus: statusByEmployee[p.id]?.self || "none",
       managerStatus: statusByEmployee[p.id]?.manager || "none",
     }))

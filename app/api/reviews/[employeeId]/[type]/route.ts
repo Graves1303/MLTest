@@ -4,7 +4,7 @@ import { reviews, users } from "@/lib/schema";
 import { and, eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getCurrentCycle, isCycleLocked } from "@/lib/cycles";
-import { canReadReview, canWriteReview } from "@/lib/permissions";
+import { canReadReview, canWriteReview, canSeePromotionRecommendation } from "@/lib/permissions";
 import { z } from "zod";
 import { slugId, RATING_VALUES, getTemplate, type CategoryData, type Goal } from "@/lib/domain";
 import { encryptText, decryptText, encryptJson, decryptJson } from "@/lib/crypto";
@@ -71,8 +71,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
   }
   const template = getTemplate(templateKey);
 
+  const canSeePromotion = await canSeePromotionRecommendation(viewer, employeeId);
   let responseReview = existing;
-  if (existing && viewer.id === employeeId) {
+  if (existing && !canSeePromotion) {
     const { promotionEligible, ...rest } = existing;
     responseReview = rest as typeof existing;
   }
@@ -84,6 +85,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     template: { key: template.key, label: template.label, categories: template.categories },
     cycle: { id: currentCycle.id, name: currentCycle.name, status: currentCycle.status },
     priorGoals,
+    // What this viewer is allowed to do with what they're looking at. The
+    // server enforces all of it; this just lets the page show the right controls.
+    access: { canWrite: await canWriteReview(viewer, employeeId, type), canSeePromotion },
   });
 }
 
@@ -199,7 +203,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
 
   const saved = await findReview(employeeId, type, currentCycle.id);
   let responseReview = saved;
-  if (saved && viewer.id === employeeId) {
+  if (saved && !(await canSeePromotionRecommendation(viewer, employeeId))) {
     const { promotionEligible, ...rest } = saved;
     responseReview = rest as typeof saved;
   }

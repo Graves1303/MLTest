@@ -216,7 +216,7 @@ export default function AdminPage() {
               ))}
             </select>
           </label>
-          {form.level && (
+          {form.level && contextForLevel(form.templateKey, form.level) && (
             <label className="block sm:col-span-2">
               <span className="block text-xs font-semibold text-[var(--ink-soft)] mb-1.5">Level context</span>
               <div className="w-full border border-black/12 rounded-lg px-3 py-2 text-[13px] text-[var(--ink-soft)] italic bg-[var(--paper)]">

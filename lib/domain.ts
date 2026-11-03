@@ -59,6 +59,26 @@ export const RETAIL_COMPETENCY_DEFINITIONS = [
 // see the user-facing copy on the submission and summary views, which says so.
 export const UPWARD_MIN_REVEAL = 1;
 
+// The most peer reviews any one person can be asked to complete in a single
+// cycle. Enforced on the server when peers are assigned (the UI just mirrors it).
+export const MAX_PEER_REVIEWS_PER_PERSON = 3;
+
+// How many peer assignments each person is currently on, given a cycle's
+// assignment rows. Pass excludeEmployeeId to ignore one employee's own list
+// (used when that list is the one being edited).
+export function countPeerLoads(
+  assignments: { employeeId: string; peerUserIds: unknown }[],
+  excludeEmployeeId?: string
+): Record<string, number> {
+  const loads: Record<string, number> = {};
+  for (const a of assignments) {
+    if (excludeEmployeeId && a.employeeId === excludeEmployeeId) continue;
+    const ids = new Set(((a.peerUserIds as string[]) || []));
+    for (const id of ids) loads[id] = (loads[id] || 0) + 1;
+  }
+  return loads;
+}
+
 export type RatingMap = Record<string, number | null>;
 export type Goal = { id: string; text: string; timeline: string };
 export type CategoryData = Record<string, { ratings: RatingMap; comments: string }>;
@@ -84,6 +104,30 @@ export function emptyCategoryData(categories: CategoryDef[]): CategoryData {
 
 const RETAIL_LEADERSHIP_PURPOSE =
   "Leads their team(s) to hit sales objectives through team development and operational and visual excellence.";
+
+// The full retail competency list, in worksheet order. Retail Leadership uses
+// all of it; Store Supervisor is this list minus two.
+const RETAIL_COMPETENCY_ITEMS = [
+  "Driving Results",
+  "Strategic Planning",
+  "Coaching Agility",
+  "Change Management",
+  "Leadership Presence",
+  "Customer Impact",
+  "Talent Building",
+  "Learning Agility",
+];
+const SALES_ASSOCIATE_COMPETENCIES = ["Driving Results", "Customer Impact", "Change Management", "Learning Agility"];
+const STORE_SUPERVISOR_COMPETENCIES = RETAIL_COMPETENCY_ITEMS.filter((n) => n !== "Talent Building" && n !== "Strategic Planning");
+
+// Definitions for a subset of the retail competencies, looked up by name (so
+// the wording can't drift from the original) and returned in the same order
+// as the rating rows.
+function retailCompetencyDefinitions(names: string[]) {
+  return names
+    .map((name) => RETAIL_COMPETENCY_DEFINITIONS.find((d) => d.name === name))
+    .filter((d): d is (typeof RETAIL_COMPETENCY_DEFINITIONS)[number] => !!d);
+}
 
 export const TEMPLATES: Record<string, Template> = {
   corporate: {
@@ -114,7 +158,7 @@ export const TEMPLATES: Record<string, Template> = {
       {
         key: "competencies",
         label: "Competencies",
-        items: ["Driving Results", "Strategic Planning", "Coaching Agility", "Change Management", "Leadership Presence", "Customer Impact", "Talent Building", "Learning Agility"],
+        items: RETAIL_COMPETENCY_ITEMS,
         definitions: RETAIL_COMPETENCY_DEFINITIONS,
       },
       {
@@ -131,6 +175,44 @@ export const TEMPLATES: Record<string, Template> = {
       { level: "District Manager", context: RETAIL_LEADERSHIP_PURPOSE },
     ],
   },
+  // Same Values as the other retail template, a shorter list of competencies,
+  // and no KPIs. Competency wording is reused from the retail worksheet and
+  // looked up by name, so it can't drift from the original definitions.
+  retail_sales_associate: {
+    key: "retail_sales_associate",
+    label: "Retail Sales Associate",
+    categories: [
+      { key: "values", label: "Values", items: VALUES_ITEMS, definitions: RETAIL_VALUES_DEFINITIONS },
+      {
+        key: "competencies",
+        label: "Competencies",
+        items: SALES_ASSOCIATE_COMPETENCIES,
+        definitions: retailCompetencyDefinitions(SALES_ASSOCIATE_COMPETENCIES),
+      },
+    ],
+    upwardCategoryKeys: ["values", "competencies"],
+    // One level for now, with no purpose text yet — add the real level ladder
+    // and descriptions here when they're decided.
+    levels: [{ level: "Sales Associate", context: "" }],
+  },
+  // Retail Leadership without KPIs, Talent Building, or Strategic Planning.
+  retail_store_supervisor: {
+    key: "retail_store_supervisor",
+    label: "Retail Store Supervisor",
+    categories: [
+      { key: "values", label: "Values", items: VALUES_ITEMS, definitions: RETAIL_VALUES_DEFINITIONS },
+      {
+        key: "competencies",
+        label: "Competencies",
+        items: STORE_SUPERVISOR_COMPETENCIES,
+        definitions: retailCompetencyDefinitions(STORE_SUPERVISOR_COMPETENCIES),
+      },
+    ],
+    upwardCategoryKeys: ["values", "competencies"],
+    // One level for now, with no purpose text yet — add the real level ladder
+    // and descriptions here when they're decided.
+    levels: [{ level: "Store Supervisor", context: "" }],
+  },
 };
 
 export function getTemplate(key: string | null | undefined): Template {
@@ -145,6 +227,13 @@ export function contextForLevel(templateKey: string | null | undefined, level: s
   if (!level) return "";
   const tpl = getTemplate(templateKey);
   return tpl.levels.find((l) => l.level.toLowerCase() === level.trim().toLowerCase())?.context || "";
+}
+
+// True if the template defines this level — separate from whether it has
+// purpose text, since a level can be valid and (for now) have none.
+export function isKnownLevel(templateKey: string | null | undefined, level: string | null | undefined) {
+  if (!level) return false;
+  return getTemplate(templateKey).levels.some((l) => l.level.toLowerCase() === level.trim().toLowerCase());
 }
 
 export function canonicalLevel(templateKey: string | null | undefined, level: string | null | undefined) {

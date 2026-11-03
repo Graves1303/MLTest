@@ -67,6 +67,8 @@ export default function ReviewFormPage() {
   const [cycleName, setCycleName] = useState<string | null>(null);
   const [priorGoals, setPriorGoals] = useState<Goal[]>([]);
   const [viewerIsHrAdmin, setViewerIsHrAdmin] = useState(false);
+  // What this viewer is allowed to do here. The server enforces it; this only decides which controls to show.
+  const [access, setAccess] = useState({ canWrite: true, canSeePromotion: true });
   const [unlocking, setUnlocking] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstLoad = useRef(true);
@@ -87,6 +89,7 @@ export default function ReviewFormPage() {
         setCategories(reviewRes.template.categories);
         setReview(reviewRes.review ? { ...reviewRes.review } : emptyReview(reviewRes.template.categories));
         setCycleLocked(reviewRes.cycle?.status === "closed");
+        setAccess(reviewRes.access || { canWrite: true, canSeePromotion: true });
         setCycleName(reviewRes.cycle?.name || null);
         setPriorGoals(reviewRes.priorGoals || []);
         setViewerIsHrAdmin(!!me.isHrAdmin);
@@ -156,7 +159,7 @@ export default function ReviewFormPage() {
 
   // Debounced silent autosave on edits (skipped for the very first load, and never while locked/read-only).
   useEffect(() => {
-    if (loading || !review || review.status === "submitted") return;
+    if (loading || !review || review.status === "submitted" || !access.canWrite) return;
     if (firstLoad.current) {
       firstLoad.current = false;
       return;
@@ -189,7 +192,7 @@ export default function ReviewFormPage() {
 
   if (!review || !employee) return null;
 
-  const readOnly = review.status === "submitted" || cycleLocked;
+  const readOnly = review.status === "submitted" || cycleLocked || !access.canWrite;
   const canSubmit = categories.every((c) => review.categoryData[c.key]?.comments?.trim()) && review.summary.trim();
 
   return (
@@ -229,10 +232,16 @@ export default function ReviewFormPage() {
         </div>
       )}
 
+      {!access.canWrite && (
+        <div className="bg-[var(--paper)] border border-black/10 text-[var(--ink-soft)] rounded-lg px-3.5 py-2.5 text-[13px] mb-5">
+          You're viewing this review read-only.
+        </div>
+      )}
+
       {review.status === "submitted" && (
         <div className="flex items-center gap-2.5 flex-wrap bg-[var(--pine)]/10 text-[var(--pine)] border border-[var(--pine)]/25 rounded-lg px-3.5 py-2.5 text-[13px] font-semibold mb-5">
           <span>Submitted {review.submittedAt ? new Date(review.submittedAt).toLocaleDateString() : ""}</span>
-          {cycleLocked ? null : review.locked ? (
+          {cycleLocked || !access.canWrite ? null : review.locked ? (
             viewerIsHrAdmin ? (
               <button type="button" disabled={unlocking} onClick={unlockReview} className="ml-auto underline text-xs font-semibold disabled:opacity-50">
                 {unlocking ? "Unlocking…" : "Unlock this review (admin)"}
@@ -248,7 +257,7 @@ export default function ReviewFormPage() {
         </div>
       )}
 
-      {review.status === "submitted" && reviewType === "manager" && (
+      {review.status === "submitted" && reviewType === "manager" && access.canWrite && (
         <div
           className="flex items-center gap-2.5 flex-wrap rounded-lg px-3.5 py-2.5 text-[13px] mb-5"
           style={
@@ -346,7 +355,7 @@ export default function ReviewFormPage() {
         onChange={(goals) => setReview((r) => (r ? { ...r, goals } : r))}
       />
 
-      {reviewType === "manager" && (
+      {reviewType === "manager" && access.canSeePromotion && (
         <section className="bg-white border border-black/10 rounded-xl p-5 mb-4">
           <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">Eligible for promotion?</h3>
           <p className="text-[13px] text-[var(--ink-soft)] italic mb-3">
@@ -374,9 +383,9 @@ export default function ReviewFormPage() {
         </section>
       )}
 
-      {reviewType === "manager" && <PeerFeedbackPanel employeeId={employeeId} employeeName={employee.name} />}
+      {reviewType === "manager" && access.canWrite && <PeerFeedbackPanel employeeId={employeeId} employeeName={employee.name} />}
 
-      {reviewType === "manager" && <UpwardSummaryPanel employeeId={employeeId} employeeName={employee.name} />}
+      {reviewType === "manager" && access.canWrite && <UpwardSummaryPanel employeeId={employeeId} employeeName={employee.name} />}
 
       <div className="flex items-center justify-between gap-4 flex-wrap mt-2">
         <span className="font-[family-name:var(--font-display)] text-[12.5px] text-[var(--ink-soft)]">

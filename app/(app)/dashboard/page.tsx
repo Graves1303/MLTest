@@ -11,6 +11,7 @@ type Row = {
   title: string | null;
   level: string | null;
   managerId: string | null;
+  relationship?: "self" | "direct" | "skip" | "other";
   selfStatus: string;
   managerStatus: string;
 };
@@ -85,7 +86,7 @@ export default function DashboardPage() {
 
   const scoped =
     isHrAdmin && viewMode === "mine"
-      ? (rows || []).filter((r) => r.id === viewerId || r.managerId === viewerId)
+      ? (rows || []).filter((r) => r.relationship === "self" || r.relationship === "direct" || r.relationship === "skip")
       : rows || [];
   const filtered = scoped.filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()));
 
@@ -195,7 +196,7 @@ export default function DashboardPage() {
       <section className="bg-white border border-black/10 rounded-xl p-5">
         <header className="flex items-center justify-between gap-3 mb-1.5 flex-wrap">
           <h3 className="font-[family-name:var(--font-display)] font-semibold text-base">
-            {isHrAdmin && viewMode === "admin" ? "Everyone" : "Direct reports"}
+            {isHrAdmin && viewMode === "admin" ? "Everyone" : "Your team"}
           </h3>
           <input
             type="text"
@@ -234,6 +235,11 @@ export default function DashboardPage() {
               >
                 <div className="font-semibold">
                   {r.name} {r.id === viewerId && <span className="text-[var(--ink-soft)] font-normal text-xs">(you)</span>}
+                  {r.relationship === "skip" && (
+                    <div className="text-[12px] text-[var(--ink-soft)] font-normal">
+                      Reports to {(rows || []).find((x) => x.id === r.managerId)?.name || "someone on your team"}
+                    </div>
+                  )}
                 </div>
                 <div className="text-[13.5px] text-[var(--ink-soft)]">{r.title || "—"}</div>
                 <div>

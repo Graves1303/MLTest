@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { reviews, users } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { canReadReview, canViewRosterEntry } from "@/lib/permissions";
+import { canReadReview, canViewRosterEntry, canSeePromotionRecommendation } from "@/lib/permissions";
 import { getCurrentCycle } from "@/lib/cycles";
 import { getTemplate, type CategoryData, type Goal } from "@/lib/domain";
 import { decryptText, decryptJson } from "@/lib/crypto";
@@ -32,6 +32,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     .limit(1);
   if (!employeeRows[0]) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
+  const showPromotion = await canSeePromotionRecommendation(currentViewer, employeeId);
+
   async function loadIfAllowed(type: "self" | "manager") {
     const currentCycle = await getCurrentCycle();
     if (!currentCycle) return null;
@@ -49,7 +51,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
       categoryData: decryptJson<CategoryData>(row.categoryData, {} as CategoryData),
       goals: decryptJson<Goal[]>(row.goals, []),
     };
-    if (currentViewer.id === employeeId) {
+    if (!showPromotion) {
       const { promotionEligible, ...rest } = decrypted;
       return rest as typeof decrypted;
     }
