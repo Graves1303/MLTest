@@ -1,3 +1,6 @@
+import pg from "pg";
+try { process.loadEnvFile(".env"); } catch {}
+
 const BASE = "http://localhost:3100";
 function jar() {
   let cookie = "";
@@ -64,14 +67,19 @@ async function main() {
 
   console.log("\n=== Definitions dropdowns ===");
   check("Each of the 4 competencies has a definition, matching the rows", same(comps.definitions.map((d) => d.name), WANT_COMPETENCIES), comps.definitions?.map((d) => d.name));
-  check("Definition wording is the retail worksheet's", /elevates their team/.test(comps.definitions[0].looksLike) && /holistic understanding of who our customer is/.test(comps.definitions[1].looksLike), comps.definitions[0]);
+  const saDef = Object.fromEntries(comps.definitions.map((d) => [d.name, d.looksLike]));
+  check("Associate wording: Change Management is 'Receptive to change processes & initiatives.'", saDef["Change Management"] === "Receptive to change processes & initiatives.", saDef["Change Management"]);
+  check("Associate wording: Driving Results is about holding themself to a high level of performance", /^Energized by a challenge & consistently holds themself to a high level of performance; can speak to and contributes to business goals\.$/.test(saDef["Driving Results"]), saDef["Driving Results"]);
+  check("Associate wording: Customer Impact is the version without coaching others", /every time\.$/.test(saDef["Customer Impact"]) && !/coaches/.test(saDef["Customer Impact"]), saDef["Customer Impact"]);
+  check("Associate wording: Learning Agility says Self-aware (hyphen restored)", /Self-aware, constantly seeking improvement/.test(saDef["Learning Agility"]), saDef["Learning Agility"]);
+  check("No associate definition uses team-leadership language", !comps.definitions.some((d) => /team/i.test(d.looksLike)), comps.definitions.filter((d) => /team/i.test(d.looksLike)).map((d) => d.name));
   check("All 7 Values have definitions", same(values.definitions.map((d) => d.name), WANT_VALUES));
 
   console.log("\n=== Levels ===");
   let u = (await hr.fetch(`/api/users/${saId}`)).body;
   check("Level 'sales associate' was tidied to 'Sales Associate'", u.level === "Sales Associate", u.level);
   check("Person is on the new template", u.templateKey === KEY, u.templateKey);
-  check("No purpose text yet (nothing invented)", u.levelContext === "", u.levelContext);
+  check("Level description is the worksheet's Purpose followed by its Performance Measurement", u.levelContext === "Delivers a best-in-class brand experience to our customers. Performance largely measured by individual competencies & application of values to deliver a consistent customer experience.", u.levelContext);
 
   console.log("\n=== Submitting and scoring ===");
   res = await sam.fetch(`/api/reviews/${saId}/self`, {
@@ -139,6 +147,24 @@ async function main() {
   check("A level from a different template DOES get flagged", res.body.problems.some((p) => /Csv Wrong Level/.test(p) && /District Manager/.test(p)), res.body.problems);
   const all = (await hr.fetch("/api/users")).body;
   check("Imported people are on the new template", all.find((x) => x.email === "csv.associate@sa.com")?.templateKey === KEY);
+
+  console.log("\n=== People added BEFORE this wording existed (blank description saved on their record) ===");
+  const EXPECTED_CONTEXT = "Delivers a best-in-class brand experience to our customers. Performance largely measured by individual competencies & application of values to deliver a consistent customer experience.";
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  await pool.query("UPDATE users SET level_context = '' WHERE id = ANY($1)", [[saId, boss]]);
+  const savedCopy = (await pool.query("SELECT level_context FROM users WHERE id = $1", [saId])).rows[0].level_context;
+  check("(setup) their saved description really is blank in the database", savedCopy === "", savedCopy);
+  res = await hr.fetch(`/api/users/${saId}`);
+  check("Their record still shows the current description", res.body.levelContext === EXPECTED_CONTEXT, res.body.levelContext);
+  res = await hr.fetch("/api/users");
+  check("The roster list shows it too", res.body.find((x) => x.id === saId).levelContext === EXPECTED_CONTEXT);
+  res = await sam.fetch("/api/auth/me");
+  check("Their own signed-in record has it", res.body.levelContext === EXPECTED_CONTEXT, res.body.levelContext);
+  res = await (await login("SA Report")).fetch("/api/upward/draft");
+  check("An upward review of a manager with a blank saved description shows it", res.body.managerLevelContext === EXPECTED_CONTEXT, res.body.managerLevelContext);
+  res = await hr.fetch(`/api/users/${saId}`, { method: "PATCH", body: JSON.stringify({ title: "Renamed" }) });
+  check("Editing someone doesn't disturb it", (await hr.fetch(`/api/users/${saId}`)).body.levelContext === EXPECTED_CONTEXT);
+  await pool.end();
 
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

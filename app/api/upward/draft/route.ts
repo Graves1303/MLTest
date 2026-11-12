@@ -4,7 +4,7 @@ import { upwardDrafts, users } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getCurrentCycle } from "@/lib/cycles";
-import { emptyCategoryData, getTemplate, RATING_VALUES, slugId, type CategoryData } from "@/lib/domain";
+import { emptyCategoryData, getTemplate, RATING_VALUES, slugId, effectiveLevelContext, type CategoryData } from "@/lib/domain";
 import { z } from "zod";
 import { encryptJson, decryptJson } from "@/lib/crypto";
 
@@ -22,7 +22,7 @@ export async function GET() {
     .limit(1);
   const managerName = mgrRows[0]?.name || null;
   const managerLevel = mgrRows[0]?.level || null;
-  const managerLevelContext = mgrRows[0]?.levelContext || null;
+  const managerLevelContext = effectiveLevelContext(mgrRows[0]?.templateKey, mgrRows[0]?.level, mgrRows[0]?.levelContext) || null;
 
   const template = getTemplate(mgrRows[0]?.templateKey);
   const upwardCategories = template.categories.filter((c) => template.upwardCategoryKeys.includes(c.key));

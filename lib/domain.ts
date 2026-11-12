@@ -120,14 +120,38 @@ const RETAIL_COMPETENCY_ITEMS = [
 const SALES_ASSOCIATE_COMPETENCIES = ["Driving Results", "Customer Impact", "Change Management", "Learning Agility"];
 const STORE_SUPERVISOR_COMPETENCIES = RETAIL_COMPETENCY_ITEMS.filter((n) => n !== "Talent Building" && n !== "Strategic Planning");
 
-// Definitions for a subset of the retail competencies, looked up by name (so
-// the wording can't drift from the original) and returned in the same order
-// as the rating rows.
-function retailCompetencyDefinitions(names: string[]) {
-  return names
-    .map((name) => RETAIL_COMPETENCY_DEFINITIONS.find((d) => d.name === name))
-    .filter((d): d is (typeof RETAIL_COMPETENCY_DEFINITIONS)[number] => !!d);
-}
+// Sales Associate and Store Supervisor wording, from the "2026 Retail APR – SA
+// & SUP Template" worksheet. The two levels share some definitions and differ
+// on others (e.g. associates are "receptive to change"; supervisors "champion
+// & align their team"), so each template has its own list, written in the
+// same order as its rating rows.
+const LEARNING_AGILITY_RETAIL_FRONTLINE =
+  "Desire to learn & change with a ‘growth mindset’; seeks new information, ideas, and experiences. Self-aware, constantly seeking improvement both personally and professionally.";
+
+const SALES_ASSOCIATE_COMPETENCY_DEFINITIONS = [
+  { name: "Driving Results", looksLike: "Energized by a challenge & consistently holds themself to a high level of performance; can speak to and contributes to business goals." },
+  { name: "Customer Impact", looksLike: "Seamlessly weaves together selling behaviors, visual merchandising, and operational excellence to deliver an outstanding customer experience every time." },
+  { name: "Change Management", looksLike: "Receptive to change processes & initiatives." },
+  { name: "Learning Agility", looksLike: LEARNING_AGILITY_RETAIL_FRONTLINE },
+];
+
+const STORE_SUPERVISOR_COMPETENCY_DEFINITIONS = [
+  { name: "Driving Results", looksLike: "Energized by a challenge & consistently elevates their team to higher levels of performance through delegation, coaching to, and contributing to business goals." },
+  { name: "Coaching Agility", looksLike: "Effectively communicates & coaches in the moment. Creates an environment of ownership & healthy conflict resolution." },
+  { name: "Change Management", looksLike: "Champions & aligns their team to change initiatives that elevate the health of the business, unifying their team all in the same direction." },
+  { name: "Leadership Presence", looksLike: "Projects confidence, credibility, and influence across their team through a developing combination of communication & business acumen." },
+  { name: "Customer Impact", looksLike: "Seamlessly weaves together selling behaviors, visual merchandising, and operational excellence to deliver an outstanding customer experience every time and coaches other team members to do the same." },
+  { name: "Learning Agility", looksLike: LEARNING_AGILITY_RETAIL_FRONTLINE },
+];
+
+// Level descriptions: the worksheet's Purpose followed by its Performance
+// Measurement, shown together under the person's name on their review.
+const SALES_ASSOCIATE_PURPOSE = "Delivers a best-in-class brand experience to our customers.";
+const SALES_ASSOCIATE_MEASUREMENT =
+  "Performance largely measured by individual competencies & application of values to deliver a consistent customer experience.";
+const STORE_SUPERVISOR_PURPOSE = "Delivers a best-in-class brand experience to our customers through coaching & operational excellence.";
+const STORE_SUPERVISOR_MEASUREMENT =
+  "Performance largely measured by individual application of competencies & values to positively influence team members and drive business results.";
 
 export const TEMPLATES: Record<string, Template> = {
   corporate: {
@@ -175,9 +199,8 @@ export const TEMPLATES: Record<string, Template> = {
       { level: "District Manager", context: RETAIL_LEADERSHIP_PURPOSE },
     ],
   },
-  // Same Values as the other retail template, a shorter list of competencies,
-  // and no KPIs. Competency wording is reused from the retail worksheet and
-  // looked up by name, so it can't drift from the original definitions.
+  // Same Values as the other retail template, a shorter list of competencies
+  // with their own wording, and no KPIs.
   retail_sales_associate: {
     key: "retail_sales_associate",
     label: "Retail Sales Associate",
@@ -187,15 +210,14 @@ export const TEMPLATES: Record<string, Template> = {
         key: "competencies",
         label: "Competencies",
         items: SALES_ASSOCIATE_COMPETENCIES,
-        definitions: retailCompetencyDefinitions(SALES_ASSOCIATE_COMPETENCIES),
+        definitions: SALES_ASSOCIATE_COMPETENCY_DEFINITIONS,
       },
     ],
     upwardCategoryKeys: ["values", "competencies"],
-    // One level for now, with no purpose text yet — add the real level ladder
-    // and descriptions here when they're decided.
-    levels: [{ level: "Sales Associate", context: "" }],
+    levels: [{ level: "Sales Associate", context: `${SALES_ASSOCIATE_PURPOSE} ${SALES_ASSOCIATE_MEASUREMENT}` }],
   },
-  // Retail Leadership without KPIs, Talent Building, or Strategic Planning.
+  // Retail Leadership's competencies minus Talent Building and Strategic
+  // Planning, with supervisor-specific wording, and no KPIs.
   retail_store_supervisor: {
     key: "retail_store_supervisor",
     label: "Retail Store Supervisor",
@@ -205,13 +227,11 @@ export const TEMPLATES: Record<string, Template> = {
         key: "competencies",
         label: "Competencies",
         items: STORE_SUPERVISOR_COMPETENCIES,
-        definitions: retailCompetencyDefinitions(STORE_SUPERVISOR_COMPETENCIES),
+        definitions: STORE_SUPERVISOR_COMPETENCY_DEFINITIONS,
       },
     ],
     upwardCategoryKeys: ["values", "competencies"],
-    // One level for now, with no purpose text yet — add the real level ladder
-    // and descriptions here when they're decided.
-    levels: [{ level: "Store Supervisor", context: "" }],
+    levels: [{ level: "Store Supervisor", context: `${STORE_SUPERVISOR_PURPOSE} ${STORE_SUPERVISOR_MEASUREMENT}` }],
   },
 };
 
@@ -227,6 +247,18 @@ export function contextForLevel(templateKey: string | null | undefined, level: s
   if (!level) return "";
   const tpl = getTemplate(templateKey);
   return tpl.levels.find((l) => l.level.toLowerCase() === level.trim().toLowerCase())?.context || "";
+}
+
+// The description to show for a person's level. Worked out from the template
+// each time it's read — rather than trusting the copy saved on their record
+// when they were added — so changing the wording here updates everyone at
+// once. Falls back to the saved copy for levels the template doesn't define.
+export function effectiveLevelContext(
+  templateKey: string | null | undefined,
+  level: string | null | undefined,
+  saved: string | null | undefined
+) {
+  return contextForLevel(templateKey, level) || saved || "";
 }
 
 // True if the template defines this level — separate from whether it has

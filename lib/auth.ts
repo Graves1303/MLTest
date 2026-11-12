@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users } from "./schema";
 import { eq } from "drizzle-orm";
+import { effectiveLevelContext } from "./domain";
 
 const COOKIE_NAME = "mpr_session";
 const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -89,7 +90,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     name: user.name,
     title: user.title,
     level: user.level,
-    levelContext: user.levelContext,
+    levelContext: effectiveLevelContext(user.templateKey, user.level, user.levelContext),
     isHrAdmin: user.isHrAdmin,
     managerId: user.managerId,
     mustChangePassword: user.mustChangePassword,

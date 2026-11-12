@@ -1,3 +1,6 @@
+import pg from "pg";
+try { process.loadEnvFile(".env"); } catch {}
+
 const BASE = "http://localhost:3100";
 function jar() {
   let cookie = "";
@@ -66,7 +69,13 @@ async function main() {
 
   console.log("\n=== Definitions dropdowns ===");
   check("Each of the 6 competencies has a definition, matching the rows in order", same(comps.definitions.map((d) => d.name), WANT_COMPETENCIES), comps.definitions?.map((d) => d.name));
-  check("Definition wording is the retail worksheet's", /meeting people where they are at/.test(comps.definitions[1].looksLike) && /Projects confidence/.test(comps.definitions[3].looksLike), comps.definitions[1]);
+  const supDef = Object.fromEntries(comps.definitions.map((d) => [d.name, d.looksLike]));
+  check("Supervisor wording: Change Management champions & aligns 'their team' (not 'team(s)')", /^Champions & aligns their team to change initiatives that elevate the health of the business, unifying their team all in the same direction\.$/.test(supDef["Change Management"]), supDef["Change Management"]);
+  check("Supervisor wording: Leadership Presence is influence across their team", /^Projects confidence, credibility, and influence across their team through a developing combination of communication & business acumen\.$/.test(supDef["Leadership Presence"]), supDef["Leadership Presence"]);
+  check("Supervisor wording: Coaching Agility is coaching in the moment", /^Effectively communicates & coaches in the moment\. Creates an environment of ownership & healthy conflict resolution\.$/.test(supDef["Coaching Agility"]), supDef["Coaching Agility"]);
+  check("Supervisor wording: Driving Results mentions delegation", /through delegation, coaching to, and contributing to business goals\.$/.test(supDef["Driving Results"]), supDef["Driving Results"]);
+  check("Supervisor wording: Customer Impact adds coaching other team members", /and coaches other team members to do the same\.$/.test(supDef["Customer Impact"]), supDef["Customer Impact"]);
+  check("Supervisor wording: Learning Agility says Self-aware (hyphen restored)", /Self-aware, constantly seeking improvement/.test(supDef["Learning Agility"]), supDef["Learning Agility"]);
   check("No definitions for the removed competencies", !comps.definitions.some((d) => ["Talent Building", "Strategic Planning"].includes(d.name)));
   check("All 7 Values have definitions", same(values.definitions.map((d) => d.name), WANT_VALUES));
 
@@ -74,7 +83,7 @@ async function main() {
   const u = (await hr.fetch(`/api/users/${supId}`)).body;
   check("Level 'store supervisor' was tidied to 'Store Supervisor'", u.level === "Store Supervisor", u.level);
   check("Person is on the new template", u.templateKey === KEY, u.templateKey);
-  check("No purpose text yet (nothing invented)", u.levelContext === "", u.levelContext);
+  check("Level description is the worksheet's Purpose followed by its Performance Measurement", u.levelContext === "Delivers a best-in-class brand experience to our customers through coaching & operational excellence. Performance largely measured by individual application of competencies & values to positively influence team members and drive business results.", u.levelContext);
 
   console.log("\n=== Submitting and scoring ===");
   res = await sam.fetch(`/api/reviews/${supId}/self`, {
@@ -104,9 +113,12 @@ async function main() {
   const leadTpl = await templateFor(lead, await login("Retail Leader"));
   check("Retail Leadership: Values, all 8 competencies in original order, and 6 KPIs", same(leadTpl.categories.map((c) => c.key), ["values", "competencies", "kpis"]) && same(leadTpl.categories[1].items, LEADERSHIP_COMPETENCIES) && leadTpl.categories[2].items.length === 6, leadTpl.categories.map((c) => [c.key, c.items.length]));
   check("Retail Leadership still has all 8 definitions", leadTpl.categories[1].definitions.length === 8);
+  const leadDef = Object.fromEntries(leadTpl.categories[1].definitions.map((d) => [d.name, d.looksLike]));
+  check("...in their ORIGINAL leader wording (unchanged by the supervisor/associate wording)", /^Champions & aligns their team\(s\) to change initiatives/.test(leadDef["Change Management"]) && /meeting people where they are at/.test(leadDef["Coaching Agility"]), leadDef["Change Management"]);
   const sa = await mk("Sales Assoc", { templateKey: "retail_sales_associate", level: "Sales Associate" });
   const saTpl = await templateFor(sa, await login("Sales Assoc"));
   check("Sales Associate still has exactly its 4 competencies and 4 definitions", same(saTpl.categories[1].items, ["Driving Results", "Customer Impact", "Change Management", "Learning Agility"]) && saTpl.categories[1].definitions.length === 4 && saTpl.categories.length === 2, saTpl.categories[1].items);
+  check("...with the associate wording, not the supervisor's", saTpl.categories[1].definitions.find((d) => d.name === "Change Management").looksLike === "Receptive to change processes & initiatives.");
   const corp = await mk("Corp Person");
   const corpTpl = await templateFor(corp, await login("Corp Person"));
   check("Corporate still has Values and 6 competencies", same(corpTpl.categories.map((c) => c.key), ["values", "competencies"]) && corpTpl.categories[1].items.length === 6);
@@ -146,6 +158,24 @@ async function main() {
   check("A level from a different template DOES get flagged", res.body.problems.some((p) => /Csv Wrong Level/.test(p) && /Sales Associate/.test(p)), res.body.problems);
   const all = (await hr.fetch("/api/users")).body;
   check("Imported people are on the new template", all.find((x) => x.email === "csv.supervisor@ss.com")?.templateKey === KEY);
+
+  console.log("\n=== People added BEFORE this wording existed (blank description saved on their record) ===");
+  const EXPECTED_CONTEXT = "Delivers a best-in-class brand experience to our customers through coaching & operational excellence. Performance largely measured by individual application of competencies & values to positively influence team members and drive business results.";
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  await pool.query("UPDATE users SET level_context = '' WHERE id = ANY($1)", [[supId, boss]]);
+  const savedCopy = (await pool.query("SELECT level_context FROM users WHERE id = $1", [supId])).rows[0].level_context;
+  check("(setup) their saved description really is blank in the database", savedCopy === "", savedCopy);
+  res = await hr.fetch(`/api/users/${supId}`);
+  check("Their record still shows the current description", res.body.levelContext === EXPECTED_CONTEXT, res.body.levelContext);
+  res = await hr.fetch("/api/users");
+  check("The roster list shows it too", res.body.find((x) => x.id === supId).levelContext === EXPECTED_CONTEXT);
+  res = await sam.fetch("/api/auth/me");
+  check("Their own signed-in record has it", res.body.levelContext === EXPECTED_CONTEXT, res.body.levelContext);
+  res = await (await login("SS Report")).fetch("/api/upward/draft");
+  check("An upward review of a manager with a blank saved description shows it", res.body.managerLevelContext === EXPECTED_CONTEXT, res.body.managerLevelContext);
+  res = await hr.fetch(`/api/users/${supId}`, { method: "PATCH", body: JSON.stringify({ title: "Renamed" }) });
+  check("Editing someone doesn't disturb it", (await hr.fetch(`/api/users/${supId}`)).body.levelContext === EXPECTED_CONTEXT);
+  await pool.end();
 
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

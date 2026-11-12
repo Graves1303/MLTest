@@ -12,7 +12,7 @@ import {
 import { eq, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewRosterEntry } from "@/lib/permissions";
-import { canonicalLevel, contextForLevel } from "@/lib/domain";
+import { canonicalLevel, contextForLevel, effectiveLevelContext } from "@/lib/domain";
 import { z } from "zod";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +48,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     managerName = mgrRows[0]?.name ?? null;
   }
 
-  return NextResponse.json({ ...rows[0], managerName });
+  return NextResponse.json({
+    ...rows[0],
+    levelContext: effectiveLevelContext(rows[0].templateKey, rows[0].level, rows[0].levelContext),
+    managerName,
+  });
 }
 
 const patchSchema = z.object({

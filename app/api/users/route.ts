@@ -5,7 +5,7 @@ import { inArray } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { visibleEmployeeIds } from "@/lib/permissions";
 import { z } from "zod";
-import { slugId, canonicalLevel, contextForLevel } from "@/lib/domain";
+import { slugId, canonicalLevel, contextForLevel, effectiveLevelContext } from "@/lib/domain";
 
 const PUBLIC_COLUMNS = {
   id: users.id,
@@ -29,7 +29,11 @@ export async function GET() {
       ? await db.select(PUBLIC_COLUMNS).from(users)
       : await db.select(PUBLIC_COLUMNS).from(users).where(inArray(users.id, visible));
 
-  return NextResponse.json(rows.sort((a, b) => a.name.localeCompare(b.name)));
+  return NextResponse.json(
+    rows
+      .map((r) => ({ ...r, levelContext: effectiveLevelContext(r.templateKey, r.level, r.levelContext) }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 }
 
 const createSchema = z.object({
