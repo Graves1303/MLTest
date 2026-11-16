@@ -2,6 +2,7 @@ import { db } from "./db";
 import { users } from "./schema";
 import { eq } from "drizzle-orm";
 import type { CurrentUser } from "./auth";
+import { getApprover } from "./approvals";
 
 /**
  * Every function here is meant to be called from a server-side API route
@@ -118,15 +119,17 @@ export async function canReadReview(
 }
 
 /**
- * The promotion recommendation on a manager review is visible only to the
- * manager who wrote it and HR admins — never to the person it's about
- * (even an HR admin looking at their own review), and not to managers
- * further up the chain either.
+ * The promotion recommendation on a manager review is visible to the manager
+ * who wrote it, HR admins, and the skip-level manager who approves the review
+ * (they need the full picture to approve it) — never to the person it's
+ * about, even an HR admin looking at their own review.
  */
 export async function canSeePromotionRecommendation(viewer: CurrentUser, employeeId: string) {
   if (viewer.id === employeeId) return false;
   if (viewer.isHrAdmin) return true;
-  return isDirectManagerOf(viewer.id, employeeId);
+  if (await isDirectManagerOf(viewer.id, employeeId)) return true;
+  const approver = await getApprover(employeeId);
+  return approver?.id === viewer.id;
 }
 
 /**

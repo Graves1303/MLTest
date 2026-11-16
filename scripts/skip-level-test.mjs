@@ -60,8 +60,8 @@ async function main() {
   check("Adam can read Audrey's self review", res.status === 200 && res.body.review?.status === "submitted", res);
   res = await adam.fetch(`/api/reviews/${audreyId}/manager`);
   check("Adam can read Audrey's manager review (even before it's been discussed)", res.status === 200 && res.body.review?.status === "submitted", res);
-  check("...but the promotion recommendation is NOT included for Adam", res.body.review && !("promotionEligible" in res.body.review), res.body.review);
-  check("Server tells the page Adam is read-only", res.body.access.canWrite === false && res.body.access.canSeePromotion === false, res.body.access);
+  check("...and, as Jillian's manager (the one who approves it), Adam sees the promotion recommendation", res.body.review?.promotionEligible === "yes", res.body.review);
+  check("Server tells the page Adam is read-only", res.body.access.canWrite === false && res.body.access.canSeePromotion === true, res.body.access);
 
   console.log("\n=== The promotion field stays with the people who should have it ===");
   res = await jillian.fetch(`/api/reviews/${audreyId}/manager`);
@@ -83,7 +83,7 @@ async function main() {
   console.log("\n=== Adam sees the summary, still without the promotion field ===");
   res = await adam.fetch(`/api/summary/${audreyId}`);
   check("Summary loads for Adam with both reviews", res.status === 200 && res.body.selfReview && res.body.managerReview, res.status);
-  check("Summary does not leak the promotion field", res.body.managerReview && !("promotionEligible" in res.body.managerReview), res.body.managerReview);
+  check("...and in the summary view", res.body.managerReview?.promotionEligible === "yes", res.body.managerReview);
   res = await adam.fetch(`/api/users/${audreyId}`);
   check("Adam can open Audrey's roster record", res.status === 200 && res.body.name === "Audrey", res.status);
 
@@ -131,7 +131,12 @@ async function main() {
   console.log("\n=== Existing rule for the employee is unchanged ===");
   res = await audrey.fetch(`/api/reviews/${audreyId}/manager`);
   check("Audrey can't see her own manager review until it's discussed", res.status === 403, res.status);
-  await jillian.fetch(`/api/reviews/${audreyId}/discussed`, { method: "POST", body: JSON.stringify({ discussed: true }) });
+  res = await jillian.fetch(`/api/reviews/${audreyId}/discussed`, { method: "POST", body: JSON.stringify({ discussed: true }) });
+  check("Jillian can't share it yet: Adam, her manager, has to approve it first", res.status === 409 && /Adam/.test(res.body.error), res);
+  res = await adam.fetch(`/api/reviews/${audreyId}/approval`, { method: "POST", body: JSON.stringify({ approved: true }) });
+  check("Adam approves it", res.status === 200 && res.body.approval.status === "approved", res);
+  res = await jillian.fetch(`/api/reviews/${audreyId}/discussed`, { method: "POST", body: JSON.stringify({ discussed: true }) });
+  check("Now Jillian can share it", res.status === 200, res);
   res = await audrey.fetch(`/api/reviews/${audreyId}/manager`);
   check("After it's discussed she can", res.status === 200, res.status);
   check("...and the promotion field is still hidden from her", res.body.review && !("promotionEligible" in res.body.review), res.body.review);

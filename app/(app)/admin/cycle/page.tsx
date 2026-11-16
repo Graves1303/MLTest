@@ -10,6 +10,8 @@ type ReviewScore = {
   overallGrade: string | null;
   submittedAt: string | null;
   promotionEligible?: string;
+  // Manager reviews only: has the skip-level manager approved it for sharing yet?
+  approval?: { status: "none" | "pending" | "approved"; approverName: string | null; approvedByName: string | null; approvedAt: string | null };
 };
 type Row = {
   id: string;
@@ -149,11 +151,12 @@ export default function CycleOverviewPage() {
 
   function exportCsv() {
     if (!rows) return;
+    const approvalLabel = (a?: { status: string }) => (a?.status === "approved" ? "Approved" : a?.status === "pending" ? "Awaiting approval" : "");
     const promoLabel = (v: string) => (v === "yes" ? "Yes" : v === "no" ? "No" : v === "six_months" ? "6 Months" : "");
     const header = [
       "Name", "Email", "Title", "Level", "Manager",
       "Self status", "Self overall score", "Self overall grade", "Self submitted",
-      "Manager status", "Manager overall score", "Manager overall grade", "Manager submitted",
+      "Manager status", "Manager overall score", "Manager overall grade", "Manager submitted", "Manager review approval", "Approved by",
       "Eligible for promotion",
       "Upward reviews collected", "Upward revealed", "Upward overall score", "Upward overall grade",
       "Cycle status",
@@ -165,6 +168,7 @@ export default function CycleOverviewPage() {
           csvCell(r.name), csvCell(r.email), csvCell(r.title), csvCell(r.level), csvCell(r.managerName),
           csvCell(statusLabel(r.self.status)), csvCell(r.self.overallScore), csvCell(r.self.overallGrade), csvCell(r.self.submittedAt),
           csvCell(statusLabel(r.manager.status)), csvCell(r.manager.overallScore), csvCell(r.manager.overallGrade), csvCell(r.manager.submittedAt),
+          csvCell(approvalLabel(r.manager.approval)), csvCell(r.manager.approval?.approvedByName || ""),
           csvCell(promoLabel(r.manager.promotionEligible || "")),
           csvCell(r.upwardAgg.count),
           csvCell(r.upwardAgg.revealed ? "yes" : "no"),
@@ -449,6 +453,14 @@ export default function CycleOverviewPage() {
                   </div>
                   <div>
                     <div className="text-[13px] font-semibold">{statusLabel(r.manager.status)}</div>
+                    {r.manager.approval?.status === "pending" && (
+                      <div className="text-[12px] font-semibold text-[#A8530E]">
+                        Awaiting {r.manager.approval.approverName ? `${r.manager.approval.approverName}’s ` : ""}approval
+                      </div>
+                    )}
+                    {r.manager.approval?.status === "approved" && (
+                      <div className="text-[12px] text-[var(--ink-soft)]">Approved by {r.manager.approval.approvedByName || "the approver"}</div>
+                    )}
                     {r.manager.overallScore != null && (
                       <div className="font-[family-name:var(--font-display)] text-[12.5px]" style={{ color: gradeColor(r.manager.overallGrade) }}>
                         {fmt(r.manager.overallScore)} · {r.manager.overallGrade}

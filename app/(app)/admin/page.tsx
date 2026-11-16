@@ -35,6 +35,7 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [unlockUpwardNotice, setUnlockUpwardNotice] = useState<string | null>(null);
+  const [rosterQuery, setRosterQuery] = useState("");
 
   const [form, setForm] = useState({
     email: "",
@@ -59,6 +60,29 @@ export default function AdminPage() {
       `You'll be asked to set a new password the first time you sign in.\n\nThanks!`;
     return `mailto:${email}?subject=${subject}&body=${encodeURIComponent(body)}`;
   }
+
+  // Roster search: every word typed has to match somewhere in the person's
+  // name, email, title, level, template, or "HR admin". (Manager's name is
+  // deliberately NOT searched, so looking someone up by name finds just them
+  // rather than also pulling in everyone who reports to them.)
+  const searchWords = rosterQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const visibleRows =
+    searchWords.length === 0
+      ? rows
+      : rows.filter((r) => {
+          const haystack = [
+            r.name,
+            r.email,
+            r.title,
+            r.level,
+            getTemplate(r.templateKey).label,
+            r.isHrAdmin ? "hr admin" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return searchWords.every((w) => haystack.includes(w));
+        });
 
   useEffect(() => {
     loadRoster();
@@ -275,12 +299,32 @@ export default function AdminPage() {
       </section>
 
       <section className="bg-white border border-black/10 rounded-xl p-5">
-        <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-3">Everyone on the roster</h3>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <h3 className="font-[family-name:var(--font-display)] font-semibold text-base">Everyone on the roster</h3>
+          <input
+            type="text"
+            aria-label="Search the roster"
+            placeholder="Search by name, email, or title…"
+            value={rosterQuery}
+            onChange={(e) => setRosterQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") setRosterQuery(""); }}
+            className="border border-black/15 rounded-md px-3 py-1.5 text-[13px] w-full sm:w-[300px]"
+          />
+        </div>
+        {searchWords.length > 0 && (
+          <div className="text-[12.5px] text-[var(--ink-soft)] mb-2">
+            Showing {visibleRows.length} of {rows.length} people ·{" "}
+            <button type="button" onClick={() => setRosterQuery("")} className="underline font-semibold">Clear search</button>
+          </div>
+        )}
         {unlockUpwardNotice && (
           <div className="text-[13px] font-semibold text-[var(--pine)] mb-3">{unlockUpwardNotice}</div>
         )}
         {error && <div className="text-[var(--clay)] text-sm font-semibold mb-3">{error}</div>}
-        {rows.map((r) => (
+        {rows.length > 0 && visibleRows.length === 0 && (
+          <p className="text-[var(--ink-soft)] text-sm italic py-3">No one matches “{rosterQuery.trim()}”.</p>
+        )}
+        {visibleRows.map((r) => (
           <div key={r.id} className="py-3 border-t border-black/[0.08] first:border-t-0">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>

@@ -14,6 +14,9 @@ type Row = {
   relationship?: "self" | "direct" | "skip" | "other";
   selfStatus: string;
   managerStatus: string;
+  managerApproval?: "pending" | "approved" | null;
+  approverName?: string | null;
+  needsMyApproval?: boolean;
 };
 
 type PeerAssignment = { employeeId: string; employeeName: string; submitted: boolean };
@@ -25,11 +28,13 @@ function AssignmentRow({
   href,
   submittedLabel = "View",
   pendingLabel = "Start / continue",
+  note,
 }: {
   type: string;
   subtitle: string;
   status: string;
   href: string;
+  note?: string;
   submittedLabel?: string;
   pendingLabel?: string;
 }) {
@@ -38,6 +43,7 @@ function AssignmentRow({
       <div>
         <div className="font-semibold text-sm">{type}</div>
         <div className="text-[13px] text-[var(--ink-soft)]">{subtitle}</div>
+        {note && <div className="text-[12.5px] font-semibold text-[#A8530E] mt-0.5">{note}</div>}
       </div>
       <div className="flex items-center gap-3">
         <StatusPill status={status} />
@@ -83,6 +89,7 @@ export default function DashboardPage() {
 
   const myRow = (rows || []).find((r) => r.id === viewerId);
   const myReports = (rows || []).filter((r) => r.managerId === viewerId);
+  const needsApproval = (rows || []).filter((r) => r.needsMyApproval);
 
   const scoped =
     isHrAdmin && viewMode === "mine"
@@ -103,6 +110,30 @@ export default function DashboardPage() {
           Complete a self review, upward review, and any assigned peer or direct report reviews.
         </p>
       </div>
+
+      {needsApproval.length > 0 && (
+        <section className="rounded-xl p-5 mb-6 border" style={{ background: "rgba(255,176,7,0.1)", borderColor: "rgba(231,136,53,0.45)" }}>
+          <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">
+            Waiting for your approval ({needsApproval.length})
+          </h3>
+          <p className="text-[13px] text-[var(--ink-soft)] mb-1">
+            These manager reviews need your approval before they can be shared with the person they’re about.
+          </p>
+          {needsApproval.map((r) => (
+            <div key={r.id} className="flex items-center justify-between gap-3 py-3 border-t border-black/[0.08] first:border-t-0 flex-wrap">
+              <div>
+                <div className="font-semibold text-sm">Review of {r.name}</div>
+                <div className="text-[13px] text-[var(--ink-soft)]">
+                  Written by {(rows || []).find((x) => x.id === r.managerId)?.name || "their manager"}
+                </div>
+              </div>
+              <Link href={`/review/${r.id}/manager`} className="text-[var(--horizon)] font-semibold text-[13px] hover:text-[var(--denim)]">
+                Review &amp; approve →
+              </Link>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="bg-white border border-black/10 rounded-xl p-5 mb-6">
         <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">Your reviews this cycle</h3>
@@ -140,6 +171,7 @@ export default function DashboardPage() {
                 subtitle={`About ${r.name}`}
                 status={r.managerStatus}
                 href={`/review/${r.id}/manager`}
+                note={r.managerApproval === "pending" ? `Waiting for ${r.approverName || "approval"}${r.approverName ? "’s approval" : ""} before you can share it` : undefined}
               />
             ))}
 
@@ -247,8 +279,19 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <StatusPill status={r.managerStatus} />
+                  {r.managerApproval === "pending" && (
+                    <div className="text-[12px] font-semibold text-[#A8530E] mt-1">
+                      Awaiting {r.approverName ? `${r.approverName}’s ` : ""}approval
+                    </div>
+                  )}
+                  {r.managerApproval === "approved" && <div className="text-[12px] text-[var(--ink-soft)] mt-1">Approved</div>}
                 </div>
                 <div className="flex gap-3 flex-wrap">
+                  {r.needsMyApproval && (
+                    <Link href={`/review/${r.id}/manager`} className="text-[var(--horizon)] font-semibold text-[13px] hover:text-[var(--denim)]">
+                      Review &amp; approve
+                    </Link>
+                  )}
                   {r.id !== viewerId && (r.managerId === viewerId || isHrAdmin) && (
                     <Link href={`/review/${r.id}/manager`} className="text-[var(--horizon)] font-semibold text-[13px] hover:text-[var(--denim)]">
                       Manager review

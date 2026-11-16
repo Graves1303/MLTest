@@ -32,6 +32,26 @@ export async function buildCycleReport(cycleId: string) {
     if (r.reviewerType === "manager") byEmployee[r.employeeId].manager = r;
   }
 
+  // Approval of a manager review: done by the manager's manager.
+  const personById = new Map(people.map((p) => [p.id, p]));
+  function approvalFor(employeeId: string, row?: typeof reviewRows[number]) {
+    const mgrId = personById.get(employeeId)?.managerId;
+    const approverId = mgrId ? personById.get(mgrId)?.managerId : null;
+    const approver = approverId && approverId !== employeeId ? personById.get(approverId) : null;
+    if (!approver || !row || row.status !== "submitted") return { status: "none" as const, approverName: approver?.name || null, approvedByName: null, approvedAt: null };
+    if (row.approvedAt) {
+      return {
+        status: "approved" as const,
+        approverName: approver.name,
+        approvedByName: (row.approvedById && personById.get(row.approvedById)?.name) || null,
+        approvedAt: row.approvedAt,
+      };
+    }
+    // shared before approvals existed
+    if (row.discussed) return { status: "none" as const, approverName: approver.name, approvedByName: null, approvedAt: null };
+    return { status: "pending" as const, approverName: approver.name, approvedByName: null, approvedAt: null };
+  }
+
   function scoresFor(row?: typeof reviewRows[number]) {
     if (!row) return { status: "none", overallScore: null, overallGrade: null, submittedAt: null, promotionEligible: "" };
     const template = getTemplate(row.templateKey);
@@ -50,7 +70,7 @@ export async function buildCycleReport(cycleId: string) {
   return people
     .map((p) => {
       const self = scoresFor(byEmployee[p.id]?.self);
-      const manager = scoresFor(byEmployee[p.id]?.manager);
+      const manager = { ...scoresFor(byEmployee[p.id]?.manager), approval: approvalFor(p.id, byEmployee[p.id]?.manager) };
       const cycleStatus =
         self.status === "submitted" && manager.status === "submitted"
           ? "complete"

@@ -8,6 +8,7 @@ import { canReadReview, canWriteReview, canSeePromotionRecommendation } from "@/
 import { z } from "zod";
 import { slugId, RATING_VALUES, getTemplate, type CategoryData, type Goal } from "@/lib/domain";
 import { encryptText, decryptText, encryptJson, decryptJson } from "@/lib/crypto";
+import { buildApprovalView, withoutApprovalFields } from "@/lib/approvals";
 
 function decryptReview<T extends { summary: string; categoryData: unknown; goals: unknown }>(row: T) {
   return {
@@ -78,10 +79,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     responseReview = rest as typeof existing;
   }
 
+  if (responseReview) responseReview = withoutApprovalFields(responseReview) as typeof existing;
+
   const priorGoals = await previousCycleGoals(employeeId, type, currentCycle.id);
+
+  // Approval status for manager reviews — shown to the manager, the approver,
+  // and HR, but never to the employee the review is about.
+  const approval = type === "manager" && viewer.id !== employeeId ? await buildApprovalView(viewer, employeeId, existing) : null;
 
   return NextResponse.json({
     review: responseReview || null,
+    // Only included when there's something to show, so the employee's response doesn't mention approvals at all.
+    ...(approval ? { approval } : {}),
     template: { key: template.key, label: template.label, categories: template.categories },
     cycle: { id: currentCycle.id, name: currentCycle.name, status: currentCycle.status },
     priorGoals,
@@ -180,6 +189,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
         locked: data.submit,
         submittedAt: data.submit ? now : existing.submittedAt,
         updatedAt: now,
+        // Editing or resubmitting a manager review invalidates any approval and
+        // un-shares it: the approver signed off on one specific version, and the
+        // employee should only see a version that was approved. It has to be
+        // approved again, then shared again.
+        ...(type === "manager" ? { discussed: false, discussedAt: null, approvedById: null, approvedAt: null } : {}),
       })
       .where(eq(reviews.id, existing.id));
   } else {
@@ -207,8 +221,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ empl
     const { promotionEligible, ...rest } = saved;
     responseReview = rest as typeof saved;
   }
+  const savedApproval = type === "manager" && viewer.id !== employeeId ? await buildApprovalView(viewer, employeeId, saved) : null;
   return NextResponse.json({
-    review: responseReview,
+    review: responseReview ? withoutApprovalFields(responseReview) : responseReview,
+    ...(savedApproval ? { approval: savedApproval } : {}),
     template: { key: template.key, label: template.label, categories: template.categories },
   });
 }

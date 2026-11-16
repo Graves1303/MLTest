@@ -4,6 +4,7 @@ import { reviews, users } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canReadReview, canViewRosterEntry, canSeePromotionRecommendation } from "@/lib/permissions";
+import { withoutApprovalFields } from "@/lib/approvals";
 import { getCurrentCycle } from "@/lib/cycles";
 import { getTemplate, type CategoryData, type Goal } from "@/lib/domain";
 import { decryptText, decryptJson } from "@/lib/crypto";
@@ -46,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ emp
     const allowed = await canReadReview(currentViewer, employeeId, type, (row?.status as "draft" | "submitted") ?? null, row?.discussed ?? false);
     if (!allowed || !row) return allowed ? row : null;
     const decrypted = {
-      ...row,
+      ...withoutApprovalFields(row),
       summary: decryptText(row.summary),
       categoryData: decryptJson<CategoryData>(row.categoryData, {} as CategoryData),
       goals: decryptJson<Goal[]>(row.goals, []),

@@ -29,6 +29,18 @@ type ReviewState = {
   discussedAt?: string | null;
 };
 
+// Skip-level approval of a manager review before it can be shared with the employee.
+type Approval = {
+  required: boolean;
+  status: "not_ready" | "pending" | "approved" | "not_required";
+  approverName: string | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  canApprove: boolean;
+  canWithdraw: boolean;
+  blocksSharing: boolean;
+};
+
 function emptyReview(categories: CategoryDef[]): ReviewState {
   return {
     categoryData: emptyCategoryData(categories),
@@ -69,6 +81,9 @@ export default function ReviewFormPage() {
   const [viewerIsHrAdmin, setViewerIsHrAdmin] = useState(false);
   // What this viewer is allowed to do here. The server enforces it; this only decides which controls to show.
   const [access, setAccess] = useState({ canWrite: true, canSeePromotion: true });
+  const [approval, setApproval] = useState<Approval | null>(null);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstLoad = useRef(true);
@@ -90,6 +105,7 @@ export default function ReviewFormPage() {
         setReview(reviewRes.review ? { ...reviewRes.review } : emptyReview(reviewRes.template.categories));
         setCycleLocked(reviewRes.cycle?.status === "closed");
         setAccess(reviewRes.access || { canWrite: true, canSeePromotion: true });
+        setApproval(reviewRes.approval || null);
         setCycleName(reviewRes.cycle?.name || null);
         setPriorGoals(reviewRes.priorGoals || []);
         setViewerIsHrAdmin(!!me.isHrAdmin);
@@ -124,6 +140,7 @@ export default function ReviewFormPage() {
         });
         setReview({ ...res.review });
         setCategories(res.template.categories);
+        setApproval(res.approval || null);
         setSaveState("saved");
       } catch (err: any) {
         setSaveState("error");
@@ -135,13 +152,30 @@ export default function ReviewFormPage() {
 
   async function markDiscussed(discussed: boolean) {
     setDiscussedSaving(true);
+    setActionError(null);
     try {
       await api.post(`/api/reviews/${employeeId}/discussed`, { discussed });
       setReview((r) => (r ? { ...r, discussed, discussedAt: discussed ? new Date().toISOString() : null } : r));
+      // Un-sharing or sharing changes whether approval can still be withdrawn.
+      const fresh = await api.get(`/api/reviews/${employeeId}/${reviewType}`).catch(() => null);
+      if (fresh) setApproval(fresh.approval || null);
     } catch (err: any) {
-      setSaveError(err.message || "Couldn't update that.");
+      setActionError(err.message || "Couldn't update that.");
     } finally {
       setDiscussedSaving(false);
+    }
+  }
+
+  async function decide(approved: boolean) {
+    setApprovalBusy(true);
+    setActionError(null);
+    try {
+      const res = await api.post(`/api/reviews/${employeeId}/approval`, { approved });
+      setApproval(res.approval || null);
+    } catch (err: any) {
+      setActionError(err.message || "Couldn't update the approval.");
+    } finally {
+      setApprovalBusy(false);
     }
   }
 
@@ -257,6 +291,58 @@ export default function ReviewFormPage() {
         </div>
       )}
 
+      {actionError && (
+        <div className="flex items-center gap-2.5 flex-wrap bg-[rgba(198,58,63,0.06)] text-[var(--clay)] border border-[rgba(198,58,63,0.25)] rounded-lg px-3.5 py-2.5 text-[13px] font-semibold mb-5">
+          {actionError}
+        </div>
+      )}
+
+      {approval && (approval.canApprove || approval.canWithdraw) && review.status === "submitted" && (
+        <div
+          className="flex items-center gap-2.5 flex-wrap rounded-lg px-3.5 py-2.5 text-[13px] mb-5"
+          style={
+            approval.canApprove
+              ? { background: "rgba(255,176,7,0.12)", border: "1px solid rgba(231,136,53,0.45)", color: "var(--ink)" }
+              : { background: "rgba(90,96,106,0.1)", border: "1px solid rgba(90,96,106,0.25)", color: "var(--ink)" }
+          }
+        >
+          <span>
+            {approval.canApprove
+              ? viewerIsHrAdmin
+                ? `Waiting for ${approval.approverName || "the approver"}’s approval before ${employee.managerName || "the manager"} can share this with ${employee.name}. As an HR admin, you can approve it in their place.`
+                : `${employee.managerName || "The manager"} has submitted this review of ${employee.name}. It needs your approval before it can be shared with them.`
+              : `Approved by ${approval.approvedByName || "the approver"}${approval.approvedAt ? ` on ${new Date(approval.approvedAt).toLocaleDateString()}` : ""}. ${employee.managerName || "The manager"} can now share it with ${employee.name}.`}
+          </span>
+          {approval.canApprove ? (
+            <button
+              type="button"
+              onClick={() => decide(true)}
+              disabled={approvalBusy || cycleLocked}
+              className="ml-auto rounded-lg px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: "var(--horizon)" }}
+            >
+              {approvalBusy ? "Saving…" : "Approve this review"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => decide(false)}
+              disabled={approvalBusy || cycleLocked}
+              className="ml-auto underline text-xs font-semibold disabled:opacity-50"
+            >
+              Withdraw approval
+            </button>
+          )}
+        </div>
+      )}
+
+      {approval?.status === "approved" && !approval.canWithdraw && !access.canWrite && (
+        <div className="bg-[var(--paper)] border border-black/10 text-[var(--ink-soft)] rounded-lg px-3.5 py-2.5 text-[13px] mb-5">
+          Approved by {approval.approvedByName || "the approver"}
+          {approval.approvedAt ? ` on ${new Date(approval.approvedAt).toLocaleDateString()}` : ""}.
+        </div>
+      )}
+
       {review.status === "submitted" && reviewType === "manager" && access.canWrite && (
         <div
           className="flex items-center gap-2.5 flex-wrap rounded-lg px-3.5 py-2.5 text-[13px] mb-5"
@@ -279,12 +365,20 @@ export default function ReviewFormPage() {
             </>
           ) : (
             <>
-              <span>{employee?.name || "The employee"} can't see this review yet. Mark it discussed after your 1:1 conversation.</span>
+              <span>
+                {approval?.blocksSharing
+                  ? `Waiting for ${approval.approverName || "the approver"} to approve this review before you can share it with ${employee?.name || "the employee"}.`
+                  : `${
+                      approval?.status === "approved"
+                        ? `Approved by ${approval.approvedByName || "the approver"}${approval.approvedAt ? ` on ${new Date(approval.approvedAt).toLocaleDateString()}` : ""}. `
+                        : ""
+                    }${employee?.name || "The employee"} can't see this review yet. Mark it discussed after your 1:1 conversation.`}
+              </span>
               <button
                 type="button"
                 onClick={() => markDiscussed(true)}
-                disabled={discussedSaving || cycleLocked}
-                className="ml-auto rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                disabled={discussedSaving || cycleLocked || !!approval?.blocksSharing}
+                className="ml-auto rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: "var(--horizon)" }}
               >
                 {discussedSaving ? "Saving…" : "Mark as discussed"}
@@ -359,8 +453,9 @@ export default function ReviewFormPage() {
         <section className="bg-white border border-black/10 rounded-xl p-5 mb-4">
           <h3 className="font-[family-name:var(--font-display)] font-semibold text-base mb-1">Eligible for promotion?</h3>
           <p className="text-[13px] text-[var(--ink-soft)] italic mb-3">
-            Visible only to you and HR admins — {employee.name.split(" ")[0]} will never see this section, even after
-            this review is discussed with them.
+            {access.canWrite
+              ? `Visible only to you, HR admins${approval?.approverName ? `, and ${approval.approverName} (who approves this review)` : ""}. ${employee.name.split(" ")[0]} will never see this section, even after this review is discussed with them.`
+              : `You can see this because you approve this review. ${employee.name.split(" ")[0]} will never see this section.`}
           </p>
           <div className="flex gap-2">
             {(["yes", "no", "six_months"] as const).map((opt) => (

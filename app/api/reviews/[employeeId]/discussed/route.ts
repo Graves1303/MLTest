@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { canWriteReview } from "@/lib/permissions";
 import { getCurrentCycle, isCycleLocked } from "@/lib/cycles";
+import { getApprover } from "@/lib/approvals";
 import { z } from "zod";
 
 const bodySchema = z.object({ discussed: z.boolean() });
@@ -36,6 +37,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ emp
     .limit(1);
   const existing = rows[0];
   if (!existing) return NextResponse.json({ error: "No manager review exists yet." }, { status: 404 });
+
+  // Sharing is only allowed for a SUBMITTED review that has been approved (when
+  // there's someone above the manager to approve it). Both checks are enforced
+  // here, not just in the page, so they can't be skipped: marking a draft as
+  // shared and submitting it afterwards would otherwise sidestep approval.
+  if (parsed.data.discussed) {
+    if (existing.status !== "submitted") {
+      return NextResponse.json({ error: "Submit the review before sharing it with the employee." }, { status: 409 });
+    }
+    const approver = await getApprover(employeeId);
+    if (approver && !existing.approvedAt) {
+      return NextResponse.json({ error: `This review needs ${approver.name}’s approval before it can be shared.` }, { status: 409 });
+    }
+  }
 
   await db
     .update(reviews)

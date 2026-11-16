@@ -64,8 +64,8 @@ export const reviews = pgTable(
     templateKey: text("template_key").notNull().default("corporate"),
     categoryData: jsonb("category_data"),
     summary: text("summary").notNull().default(""),
-    // "yes" | "no" | "six_months" | "" — manager-review only. Admin + the
-    // authoring manager can see this; the employee being reviewed never can,
+    // "yes" | "no" | "six_months" | "" — manager-review only. Admin, the
+    // authoring manager, and the skip-level manager who approves the review can see this; the employee being reviewed never can,
     // regardless of discussed status. Stripped server-side, not just hidden.
     promotionEligible: text("promotion_eligible").notNull().default(""),
     // Locks automatically on submission, same rule as peer feedback and
@@ -79,6 +79,12 @@ export const reviews = pgTable(
     submittedAt: timestamp("submitted_at"),
     discussed: boolean("discussed").notNull().default(false),
     discussedAt: timestamp("discussed_at"),
+    // Manager reviews only: the skip-level manager (or an HR admin standing in
+    // for them) approves a submitted review before it can be shared with the
+    // employee. Cleared whenever the review is edited, so an approval always
+    // refers to exactly the version that was read.
+    approvedById: text("approved_by_id"),
+    approvedAt: timestamp("approved_at"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
